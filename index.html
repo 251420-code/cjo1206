@@ -41,7 +41,6 @@
     </script>
 
     <style>
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -56,12 +55,11 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-        .kakao-overlay {
-            position: absolute;
-            bottom: 12px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
+        .custom-pin {
+            transition: all 0.2s ease;
+        }
+        .custom-pin:hover {
+            transform: scale(1.05);
         }
     </style>
 
@@ -130,39 +128,48 @@
             </div>
 
             <!-- 하단 안내 박스 -->
-            <div class="p-3 bg-amber-50 border-t border-amber-200 text-amber-800 text-xs flex items-center justify-between">
+            <div class="p-3 bg-emerald-50 border-t border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
                 <span class="flex items-center gap-1.5 font-medium">
-                    <i class="fa-solid fa-circle-info text-amber-600"></i>
-                    리스트나 마커를 클릭하면 상세 정보 확인 가능!
+                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                    마커를 클릭하면 상세 정보와 음성 발음 제공!
                 </span>
-                <span class="text-amber-600 text-[10px] bg-amber-100 px-1.5 py-0.5 rounded">정상 작동중</span>
+                <span class="text-emerald-600 text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded font-bold">READY</span>
             </div>
         </aside>
 
         <!-- 우측 지도 영역 -->
-        <main class="flex-1 relative h-3/5 md:h-full bg-slate-100">
-            <!-- 진짜 카카오 맵 컨테이너 -->
+        <main class="flex-1 relative h-3/5 md:h-full bg-slate-900 overflow-hidden">
+            <!-- 진짜 카카오맵이 로드되면 여기에 들어감 -->
             <div id="map" class="w-full h-full min-h-[350px]"></div>
 
-            <!-- 지도 플로팅 컨트롤 (줌 및 위치) -->
-            <div class="absolute top-4 right-4 z-20 flex flex-col gap-2">
-                <button onclick="recenterMap()" title="초기 위치로 이동" class="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition-all">
-                    <i class="fa-solid fa-location-arrow text-emerald-600"></i>
-                </button>
-                <button onclick="zoomInMap()" title="확대" class="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition-all">
-                    <i class="fa-solid fa-plus"></i>
-                </button>
-                <button onclick="zoomOutMap()" title="축소" class="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition-all">
-                    <i class="fa-solid fa-minus"></i>
-                </button>
+            <!-- 스마트 비주얼 지도 (카카오맵 API 미작동 시 완벽 대체되는 인터랙티브 지도 화면) -->
+            <div id="custom-visual-map" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 overflow-y-auto hidden">
+                <div class="absolute inset-0 opacity-15 bg-[radial-gradient(#34d399_1.5px,transparent_1.5px)] [background-size:24px_24px]"></div>
+                
+                <div class="w-full max-w-4xl z-10 space-y-4 my-auto">
+                    <div class="text-center space-y-1">
+                        <span class="bg-emerald-500/20 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/30 font-semibold">
+                            <i class="fa-solid fa-map-location-dot mr-1"></i> 인터랙티브 비주얼 가이드맵
+                        </span>
+                        <h3 class="text-white text-lg font-bold mt-2">서울 지역 안심 식이 & K-문화 스팟</h3>
+                        <p class="text-xs text-slate-400">아래 핀을 클릭하시면 즉시 상세 정보와 한글 발음(TTS)을 확인하실 수 있습니다.</p>
+                    </div>
+
+                    <!-- 가상 지도 위 핀 배치 그리드 -->
+                    <div id="visual-pins-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                        <!-- 동적 생성 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 선택된 장소 상세 팝업 카드 (오버레이) -->
+            <div id="detail-popup-card" class="hidden absolute bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-40 transition-all animate-bounce-short">
+                <!-- 동적 렌더링 -->
             </div>
         </main>
     </div>
 
     <script>
-        // ----------------------------------------------------
-        // 데이터셋: 식이 안전지대 & K-문화 스팟 데이터
-        // ----------------------------------------------------
         const placesData = [
             {
                 id: 1,
@@ -273,10 +280,9 @@
 
         let map = null;
         let kakaoMarkers = [];
-        let activeOverlay = null;
         let currentMode = 'all';
         let currentCategory = 'all';
-        let isFallbackMode = false;
+        let isKakaoMapActive = false;
 
         window.onload = function() {
             initMap();
@@ -296,35 +302,22 @@
                         const zoomControl = new kakao.maps.ZoomControl();
                         map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
 
+                        isKakaoMapActive = true;
+                        document.getElementById('custom-visual-map').classList.add('hidden');
                         renderPlaces();
                     } catch (e) {
-                        console.warn("Kakao Map init warning, activating interactive simulation map:", e);
-                        enableFallbackMap();
+                        activateVisualMap();
                     }
                 });
             } else {
-                // SDK 로드 실패 또는 도메인 차단 시 즉시 체험용 인터랙티브 지도 모드로 구동
-                enableFallbackMap();
+                activateVisualMap();
             }
         }
 
-        function enableFallbackMap() {
-            isFallbackMode = true;
-            const mapDiv = document.getElementById('map');
-            
-            mapDiv.innerHTML = `
-                <div class="w-full h-full bg-slate-800 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
-                    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]"></div>
-                    
-                    <div class="z-10 text-center space-y-3 max-w-sm">
-                        <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-emerald-500/40 animate-pulse">
-                            <i class="fa-solid fa-map-pin"></i>
-                        </div>
-                        <h4 class="font-bold text-lg text-emerald-400">인터랙티브 가이드 지도 모드</h4>
-                        <p class="text-xs text-slate-300">카카오 개발자 센터에 도메인 등록 시 실시간 지도가 활성화되며, 현재 상태에서도 왼쪽 리스트와 상세 정보, 음성 발음 기능을 완벽하게 이용하실 수 있습니다.</p>
-                    </div>
-                </div>
-            `;
+        function activateVisualMap() {
+            isKakaoMapActive = false;
+            document.getElementById('custom-visual-map').classList.remove('hidden');
+            renderVisualPins(getFilteredData());
             renderSidebarList(getFilteredData());
         }
 
@@ -380,65 +373,100 @@
             const filtered = getFilteredData();
             renderSidebarList(filtered);
 
-            if (!map || isFallbackMode) return;
+            if (isKakaoMapActive && map) {
+                kakaoMarkers.forEach(m => m.setMap(null));
+                kakaoMarkers = [];
+                closeDetailPopup();
 
-            kakaoMarkers.forEach(m => m.setMap(null));
-            kakaoMarkers = [];
-            if (activeOverlay) activeOverlay.setMap(null);
+                const bounds = new kakao.maps.LatLngBounds();
 
-            const bounds = new kakao.maps.LatLngBounds();
+                filtered.forEach(place => {
+                    const loc = new kakao.maps.LatLng(place.lat, place.lng);
+                    bounds.extend(loc);
 
-            filtered.forEach(place => {
-                const loc = new kakao.maps.LatLng(place.lat, place.lng);
-                bounds.extend(loc);
+                    const isDietary = place.mode === 'dietary';
+                    const content = document.createElement('div');
+                    content.className = "cursor-pointer transform hover:-translate-y-1 transition-transform";
+                    content.innerHTML = `
+                        <div class="flex items-center gap-1.5 bg-slate-900 text-white text-xs px-3 py-2 rounded-full shadow-xl border-2 ${isDietary ? 'border-emerald-400' : 'border-rose-400'}">
+                            <i class="fa-solid ${isDietary ? 'fa-leaf text-emerald-400' : 'fa-comment text-rose-400'}"></i>
+                            <span class="font-bold whitespace-nowrap">${place.name.split(' ')[0]}</span>
+                        </div>
+                    `;
 
-                const isDietary = place.mode === 'dietary';
-                const content = document.createElement('div');
-                content.className = "cursor-pointer transform hover:-translate-y-1 transition-transform";
-                content.innerHTML = `
-                    <div class="flex items-center gap-1.5 bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-full shadow-xl border-2 ${isDietary ? 'border-emerald-400' : 'border-rose-400'}">
-                        <i class="fa-solid ${isDietary ? 'fa-leaf text-emerald-400' : 'fa-comment text-rose-400'}"></i>
-                        <span class="font-bold whitespace-nowrap">${place.name.split(' ')[0]}</span>
-                    </div>
-                `;
+                    content.onclick = function() {
+                        showDetailPopup(place);
+                    };
 
-                content.onclick = function() {
-                    showPlaceDetail(place, loc);
-                };
+                    const customOverlay = new kakao.maps.CustomOverlay({
+                        position: loc,
+                        content: content,
+                        yAnchor: 1
+                    });
 
-                const customOverlay = new kakao.maps.CustomOverlay({
-                    position: loc,
-                    content: content,
-                    yAnchor: 1
+                    customOverlay.setMap(map);
+                    kakaoMarkers.push(customOverlay);
                 });
 
-                customOverlay.setMap(map);
-                kakaoMarkers.push(customOverlay);
-            });
-
-            if (filtered.length > 0) {
-                map.setBounds(bounds);
+                if (filtered.length > 0) {
+                    map.setBounds(bounds);
+                }
+            } else {
+                renderVisualPins(filtered);
             }
         }
 
-        function showPlaceDetail(place, loc) {
-            if (activeOverlay) activeOverlay.setMap(null);
+        function renderVisualPins(places) {
+            const container = document.getElementById('visual-pins-container');
+            container.innerHTML = '';
+
+            if (places.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center text-slate-400 py-8 text-xs">검색 결과가 없습니다.</div>`;
+                return;
+            }
+
+            places.forEach(place => {
+                const isDietary = place.mode === 'dietary';
+                const card = document.createElement('div');
+                card.className = "custom-pin bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl cursor-pointer hover:border-emerald-500 shadow-lg space-y-2 flex flex-col justify-between";
+                card.onclick = () => showDetailPopup(place);
+
+                card.innerHTML = `
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isDietary ? 'bg-emerald-900 text-emerald-300' : 'bg-rose-900 text-rose-300'}">
+                                ${place.badge}
+                            </span>
+                            <span class="text-[10px] text-slate-400"><i class="fa-solid fa-location-dot"></i> 서울</span>
+                        </div>
+                        <h4 class="font-bold text-sm text-white">${place.name}</h4>
+                        <p class="text-xs text-slate-300 line-clamp-2">${place.desc}</p>
+                    </div>
+                    <div class="pt-2 flex items-center justify-between text-[11px] text-emerald-400 font-semibold border-t border-slate-700/60">
+                        <span>상세 정보 보기</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function showDetailPopup(place) {
+            const popup = document.getElementById('detail-popup-card');
+            popup.classList.remove('hidden');
 
             const isDietary = place.mode === 'dietary';
-            
-            const overlayContent = document.createElement('div');
-            overlayContent.className = "kakao-overlay w-72 md:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left font-sans text-slate-800";
-            overlayContent.innerHTML = `
+            popup.innerHTML = `
                 <div class="${isDietary ? 'bg-emerald-600' : 'bg-rose-600'} text-white p-3.5 flex justify-between items-start">
                     <div>
                         <span class="text-[10px] bg-black/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">${place.badge}</span>
                         <h3 class="font-bold text-base mt-1 leading-tight">${place.name}</h3>
                     </div>
-                    <button onclick="closeOverlay()" class="text-white/80 hover:text-white p-1 text-sm">
+                    <button onclick="closeDetailPopup()" class="text-white/80 hover:text-white p-1 text-sm">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
-                <div class="p-4 space-y-3 text-xs">
+                <div class="p-4 space-y-3 text-xs max-h-[60vh] overflow-y-auto">
                     <p class="text-slate-600 leading-relaxed">${place.desc}</p>
                     
                     <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1">
@@ -467,22 +495,10 @@
                     </div>
                 </div>
             `;
-
-            activeOverlay = new kakao.maps.CustomOverlay({
-                position: loc,
-                content: overlayContent,
-                yAnchor: 1.15
-            });
-
-            activeOverlay.setMap(map);
-            map.panTo(loc);
         }
 
-        function closeOverlay() {
-            if (activeOverlay) {
-                activeOverlay.setMap(null);
-                activeOverlay = null;
-            }
+        function closeDetailPopup() {
+            document.getElementById('detail-popup-card').classList.add('hidden');
         }
 
         function renderSidebarList(places) {
@@ -505,12 +521,7 @@
                 card.className = "p-3.5 bg-white border border-slate-200 rounded-2xl hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer space-y-2 group";
                 
                 card.onclick = function() {
-                    if (map && !isFallbackMode) {
-                        const loc = new kakao.maps.LatLng(place.lat, place.lng);
-                        showPlaceDetail(place, loc);
-                    } else {
-                        alert(`[${place.name}]\n\n${place.desc}\n\n💡 팁: ${place.ingredientsNotes}\n\n🗣️ 현지 표현: "${place.koreanPhrase}"`);
-                    }
+                    showDetailPopup(place);
                 };
 
                 card.innerHTML = `
@@ -553,23 +564,10 @@
             document.body.removeChild(textarea);
 
             const toast = document.createElement('div');
-            toast.className = "fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-4 py-2 rounded-xl shadow-2xl z-50 flex items-center gap-2 animate-bounce";
+            toast.className = "fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-4 py-2 rounded-xl shadow-2xl z-50 flex items-center gap-2";
             toast.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> 한글 표현이 클립보드에 복사되었습니다!`;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 2000);
-        }
-
-        function recenterMap() {
-            if (map && !isFallbackMode) {
-                map.setCenter(new kakao.maps.LatLng(37.5550, 126.9800));
-                map.setLevel(6);
-            }
-        }
-        function zoomInMap() {
-            if (map && !isFallbackMode) map.setLevel(map.getLevel() - 1);
-        }
-        function zoomOutMap() {
-            if (map && !isFallbackMode) map.setLevel(map.getLevel() + 1);
         }
     </script>
 </body>
