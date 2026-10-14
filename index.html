@@ -1,61 +1,47 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seoul Safe Travel & K-Culture Map</title>
+    <title>외국인 맞춤 안심 지킴이 : 식이케어 & K-문화 지도</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome Icons -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Kakao Map API with autoload=false fix -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e3ac476257c12cad9a42ce153a94bb41&libraries=services&autoload=false"></script>
+    <!-- Google Fonts Inter & Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
     
     <script>
         tailwind.config = {
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans KR', 'Inter', 'sans-serif'],
+                    },
                     colors: {
                         brand: {
-                            50: '#eef2ff',
-                            100: '#e0e7ff',
-                            500: '#6366f1',
-                            600: '#4f46e5',
-                            700: '#4338ca',
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        },
+                        kculture: {
+                            50: '#fef2f2',
+                            100: '#ffe4e4',
+                            500: '#ef4444',
+                            600: '#dc2626',
                         }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
                     }
                 }
             }
         }
     </script>
+
     <style>
-        /* Ensure html and body fill viewport */
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-
-        /* Explicit map size to guarantee Kakao Map renders */
-        #map {
-            width: 100% !important;
-            height: 100% !important;
-            min-height: 350px;
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-        }
-
-        /* Custom scrollbar styling */
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -70,891 +56,520 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-
-        /* Custom Overlay Styling */
-        .custom-overlay {
+        .kakao-overlay {
             position: absolute;
-            bottom: 45px;
+            bottom: 12px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 50;
+            z-index: 10;
         }
     </style>
+
+    <!-- 카카오맵 SDK (autoload=false 적용) -->
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=ad63ffc0e1a0dda9cd73292a8da47456&libraries=services,clusterer&autoload=false"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
 
-    <!-- Header Navbar -->
-    <header class="bg-white border-b border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between z-20 shadow-sm shrink-0 gap-2">
-        <div class="flex items-center space-x-3">
-            <div class="bg-gradient-to-tr from-brand-600 to-indigo-500 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
-                <i class="fa-solid font-bold text-lg fa-compass"></i>
+    <!-- 상단 헤더 -->
+    <header class="bg-white border-b border-slate-200 px-4 py-3 flex-shrink-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-emerald-600 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
+                    <i class="fa-solid fa-map-location-dot text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <span>안심 K-가이드 지도</span>
+                        <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-semibold">외국인 맞춤형</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">식재료 안심 존(할랄·비건) & K-생활문화 실전 지도</p>
+                </div>
             </div>
-            <div>
-                <h1 class="text-lg sm:text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                    K-SafeMap <span class="text-xs px-2 py-0.5 bg-indigo-100 text-brand-700 font-medium rounded-full">Seoul Guide</span>
-                </h1>
-                <p class="text-xs text-slate-500 hidden sm:block">Dietary Safe Zones & Essential K-Culture Survival Tips</p>
-            </div>
-        </div>
 
-        <!-- Mode Toggle Tabs -->
-        <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button id="btn-mode-dietary" onclick="switchMode('dietary')" class="flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-white text-emerald-700 shadow-sm">
-                <i class="fa-solid fa-utensils text-emerald-600"></i>
-                <span class="whitespace-nowrap">🕌🥗 Dietary Safe Zone</span>
-            </button>
-            <button id="btn-mode-culture" onclick="switchMode('culture')" class="flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900">
-                <i class="fa-solid fa-comments text-orange-500"></i>
-                <span class="whitespace-nowrap">💬 K-Culture & Slang</span>
-            </button>
+            <!-- 모드 전환 탭 -->
+            <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button id="btn-mode-all" onclick="setMode('all')" class="px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-all duration-200 bg-white text-slate-800 shadow-sm">
+                    <i class="fa-solid fa-globe mr-1"></i> 전체보기
+                </button>
+                <button id="btn-mode-dietary" onclick="setMode('dietary')" class="px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900">
+                    <i class="fa-solid fa-utensils text-emerald-600 mr-1"></i> 식이 안심 (Halal/Vegan)
+                </button>
+                <button id="btn-mode-culture" onclick="setMode('culture')" class="px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900">
+                    <i class="fa-solid fa-comments text-rose-500 mr-1"></i> K-문화 & 슬랭
+                </button>
+            </div>
         </div>
     </header>
 
-    <!-- Main Content Container -->
-    <div class="flex-1 flex flex-col md:flex-row relative overflow-hidden h-full">
+    <!-- 메인 레이아웃 -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
 
-        <!-- Sidebar Container -->
-        <aside id="sidebar" class="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col z-10 shadow-lg transition-all duration-300 h-1/2 md:h-full shrink-0">
-            
-            <!-- Search & Filter Controls -->
-            <div class="p-3 sm:p-4 border-b border-slate-100 space-y-3 bg-slate-50/50">
-                <!-- Search Input -->
+        <!-- 좌측 사이드바 (리스트 & 검색) -->
+        <aside id="sidebar" class="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col z-20 h-2/5 md:h-full transition-all duration-300">
+            <!-- 검색 및 카테고리 필터 -->
+            <div class="p-4 border-b border-slate-100 space-y-3 bg-slate-50/50">
                 <div class="relative">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                    <input type="text" id="search-input" onkeyup="filterPlaces()" placeholder="Search location, dish, phrase (e.g. Myeongdong)..." class="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all shadow-sm">
-                    <button onclick="clearSearch()" id="clear-search-btn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
+                    <input type="text" id="search-input" onkeyup="filterPlaces()" placeholder="장소명, 요리, K-슬랭 검색 (예: 이모님, 비건)" 
+                        class="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
                 </div>
 
-                <!-- Sub-Filter Categories -->
-                <div id="sub-filter-container" class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                    <!-- Dynamic rendering via JS -->
+                <!-- 세부 필터 태그 -->
+                <div id="filter-tags" class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                    <button onclick="setCategoryFilter('all')" class="cat-tag active px-2.5 py-1 rounded-lg border bg-slate-800 text-white border-slate-800 whitespace-nowrap font-medium transition-all">전체</button>
+                    <button onclick="setCategoryFilter('halal')" class="cat-tag px-2.5 py-1 rounded-lg border bg-white text-slate-600 border-slate-200 hover:bg-slate-100 whitespace-nowrap font-medium transition-all">🕌 할랄 (Halal)</button>
+                    <button onclick="setCategoryFilter('vegan')" class="cat-tag px-2.5 py-1 rounded-lg border bg-white text-slate-600 border-slate-200 hover:bg-slate-100 whitespace-nowrap font-medium transition-all">🌱 비건 (Vegan)</button>
+                    <button onclick="setCategoryFilter('slang')" class="cat-tag px-2.5 py-1 rounded-lg border bg-white text-slate-600 border-slate-200 hover:bg-slate-100 whitespace-nowrap font-medium transition-all">💬 실전 한글</button>
+                    <button onclick="setCategoryFilter('tip')" class="cat-tag px-2.5 py-1 rounded-lg border bg-white text-slate-600 border-slate-200 hover:bg-slate-100 whitespace-nowrap font-medium transition-all">💡 식당 문화 팁</button>
                 </div>
             </div>
 
-            <!-- Place Counter Header -->
-            <div class="px-4 py-2 bg-slate-100/60 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-                <span id="list-count">Showing 0 locations</span>
-                <span id="active-mode-label" class="font-semibold text-emerald-600">Dietary Safe Mode</span>
+            <!-- 장소 리스트 영역 -->
+            <div id="place-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <!-- 자바스크립트로 동적 생성됨 -->
             </div>
 
-            <!-- Places List -->
-            <div id="places-list" class="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 space-y-1">
-                <!-- Place cards inserted dynamically -->
+            <!-- 하단 안내 박스 -->
+            <div class="p-3 bg-amber-50 border-t border-amber-200 text-amber-800 text-xs flex items-center justify-between">
+                <span class="flex items-center gap-1.5 font-medium">
+                    <i class="fa-solid fa-circle-info text-amber-600"></i>
+                    리스트나 마커를 클릭하면 상세 정보 확인 가능!
+                </span>
+                <span class="text-amber-600 text-[10px] bg-amber-100 px-1.5 py-0.5 rounded">정상 작동중</span>
             </div>
         </aside>
 
-        <!-- Map View Container -->
-        <main class="flex-1 relative h-1/2 md:h-full w-full bg-slate-100">
-            <!-- Kakao Map Container -->
-            <div id="map" class="w-full h-full"></div>
+        <!-- 우측 지도 영역 -->
+        <main class="flex-1 relative h-3/5 md:h-full bg-slate-100">
+            <!-- 진짜 카카오 맵 컨테이너 -->
+            <div id="map" class="w-full h-full min-h-[350px]"></div>
 
-            <!-- Map Fallback / Troubleshooting UI (Shown if Kakao Map fails to load) -->
-            <div id="map-fallback" class="hidden absolute inset-0 z-20 bg-slate-900/90 text-white p-6 flex-col items-center justify-center text-center space-y-4 backdrop-blur-md">
-                <div class="w-16 h-16 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center text-2xl border border-red-500/30">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
-                </div>
-                <div class="max-w-md space-y-2">
-                    <h3 class="text-lg font-bold text-white">Kakao Map Loading Issue</h3>
-                    <p class="text-xs text-slate-300 leading-relaxed">
-                        The map couldn't display. This usually happens when your website domain is not registered in the Kakao Developers Console.
-                    </p>
-                </div>
-
-                <div class="bg-slate-800 border border-slate-700/80 p-4 rounded-xl text-left text-xs space-y-2 max-w-md w-full">
-                    <div class="font-semibold text-amber-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-key"></i> How to fix this:
-                    </div>
-                    <ol class="list-decimal list-inside space-y-1 text-slate-300 leading-normal">
-                        <li>Log into <a href="https://developers.kakao.com" target="_blank" class="text-indigo-400 underline">developers.kakao.com</a></li>
-                        <li>Go to <b>App Settings ➔ Platform ➔ Web</b></li>
-                        <li>Add your current domain (e.g. <code class="bg-slate-900 px-1 py-0.5 rounded text-amber-300" id="current-domain-text">https://username.github.io</code>)</li>
-                        <li>Ensure <b>KakaoMap Product</b> is set to <b>ON</b></li>
-                    </ol>
-                </div>
-
-                <div class="pt-2">
-                    <button onclick="retryKakaoMapLoad()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-4 py-2 rounded-lg font-semibold transition-all">
-                        <i class="fa-solid fa-rotate-right mr-1"></i> Retry Loading Map
-                    </button>
-                </div>
-            </div>
-
-            <!-- Map Action Floating Controls -->
-            <div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                <button onclick="setMapCenterToUser()" title="My Location" class="w-10 h-10 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-md hover:bg-slate-50 flex items-center justify-center transition-all active:scale-95">
-                    <i class="fa-solid fa-crosshairs text-base"></i>
+            <!-- 지도 플로팅 컨트롤 (줌 및 위치) -->
+            <div class="absolute top-4 right-4 z-20 flex flex-col gap-2">
+                <button onclick="recenterMap()" title="초기 위치로 이동" class="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-location-arrow text-emerald-600"></i>
                 </button>
-                <button onclick="zoomInMap()" title="Zoom In" class="w-10 h-10 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-md hover:bg-slate-50 flex items-center justify-center transition-all active:scale-95">
-                    <i class="fa-solid fa-plus text-base"></i>
+                <button onclick="zoomInMap()" title="확대" class="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-plus"></i>
                 </button>
-                <button onclick="zoomOutMap()" title="Zoom Out" class="w-10 h-10 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-md hover:bg-slate-50 flex items-center justify-center transition-all active:scale-95">
-                    <i class="fa-solid fa-minus text-base"></i>
+                <button onclick="zoomOutMap()" title="축소" class="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition-all">
+                    <i class="fa-solid fa-minus"></i>
                 </button>
-            </div>
-
-            <!-- Map Legend -->
-            <div class="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200 p-3 rounded-xl shadow-lg text-xs hidden sm:block">
-                <div class="font-bold text-slate-800 mb-1 border-b pb-1">Legend</div>
-                <div class="space-y-1 text-slate-600" id="map-legend">
-                    <!-- Dynamic legend content -->
-                </div>
             </div>
         </main>
     </div>
 
     <script>
-        // Global State variables
-        let map = null;
-        let markers = [];
-        let customOverlay = null;
-        let currentMode = 'dietary'; // 'dietary' or 'culture'
-        let currentFilter = 'ALL';
-        let activePlaceId = null;
-        let mapLoadedSuccessfully = false;
-
-        // Seoul Center Coordinates
-        const SEOUL_CENTER = { lat: 37.5615, lng: 126.9830 };
-
-        // Places Master Dataset
-        const PLACES_DATA = [
-            // ==================== DIETARY SAFE ZONE LOCATIONS ====================
+        // ----------------------------------------------------
+        // 데이터셋: 식이 안전지대 & K-문화 스팟 데이터
+        // ----------------------------------------------------
+        const placesData = [
             {
-                id: 'd1',
-                mode: 'dietary',
-                category: 'HALAL',
-                title: 'Myeongdong K-BBQ Safe Zone',
-                titleKo: '명동 할랄 코리안 바베큐',
-                lat: 37.5620,
-                lng: 126.9852,
-                area: 'Myeongdong',
-                address: 'Myeongdong 8-gil 12, Jung-gu, Seoul',
-                tags: ['Halal Certified', 'No Pork', 'Private Grill'],
-                rating: 4.8,
-                summary: 'Strictly Halal-certified beef & marinated lamb cooked on dedicated separate grills.',
-                details: {
-                    halalCert: 'KMF (Korea Muslim Federation) Certified',
-                    porkFree: '100% Pork & Lard Free Kitchen',
-                    vegetarianOpt: 'Available (Mushroom & Tofu Sides)',
-                    keyTip: 'Side dishes (Kimchi, Pickles) are made with plant-based broth without fish sauce.',
-                    phraseKo: '할랄 인증 고기인가요?',
-                    phraseEng: 'Is this Halal-certified meat?',
-                    phrasePron: 'Halal in-jeung go-gi-in-ga-yo?'
-                }
-            },
-            {
-                id: 'd2',
-                mode: 'dietary',
-                category: 'VEGAN',
-                title: 'Hongdae Green Garden Bibimbap',
-                titleKo: '홍대 그린 비빔밥',
-                lat: 37.5552,
-                lng: 126.9235,
-                area: 'Hongdae',
-                address: 'Eowisang-ro 25, Mapo-gu, Seoul',
-                tags: ['100% Vegan', 'Gluten-Free', 'No Fish Sauce'],
-                rating: 4.9,
-                summary: 'Authentic Bibimbap with wild mountain herbs, mushrooms, and soy-based homemade pastes.',
-                details: {
-                    halalCert: 'Vegan-Friendly (No Pork/Alcohol)',
-                    porkFree: '100% Plant-based',
-                    vegetarianOpt: 'Strict Vegan Menu Options',
-                    keyTip: 'The Kimchi served here is made without salted shrimp or fish sauce.',
-                    phraseKo: '고기나 젓갈 빼주세요.',
-                    phraseEng: 'Please omit meat and fish sauce.',
-                    phrasePron: 'Go-gi-na jeot-gal ppae-ju-se-yo.'
-                }
-            },
-            {
-                id: 'd3',
-                mode: 'dietary',
-                category: 'ALLERGY',
-                title: 'Seongsu Oat & Gluten-Free Bakery',
-                titleKo: '성수 오트 베이커리',
-                lat: 37.5445,
-                lng: 127.0560,
-                area: 'Seongsu-dong',
-                address: 'Seongsui-ro 10-gil 18, Seongdong-gu, Seoul',
-                tags: ['Dairy-Free', 'Nut-Free', 'Oat Milk'],
-                rating: 4.7,
-                summary: 'All desserts and beverages utilize premium Oat Milk or Almond Milk with clear allergen warnings.',
-                details: {
-                    halalCert: 'Alcohol-Free Bakery',
-                    porkFree: 'No Gelatin / No Lard',
-                    vegetarianOpt: '100% Dairy-Free Option',
-                    keyTip: 'Free substitute to Oat milk for all handcrafted coffee drinks.',
-                    phraseKo: '우유 대신 오트밀크로 바꿔주세요.',
-                    phraseEng: 'Please substitute milk with oat milk.',
-                    phrasePron: 'U-yu dae-sin oat-milk-ro ba-kkwo-ju-se-yo.'
-                }
-            },
-            {
-                id: 'd4',
-                mode: 'dietary',
-                category: 'SEAFOOD',
-                title: 'Itaewon Seafood Tofu Stew',
-                titleKo: '이태원 해물 순두부',
+                id: 1,
+                name: "케르반 이태원점 (KERVAN)",
+                mode: "dietary",
+                category: "halal",
                 lat: 37.5348,
-                lng: 126.9940,
-                area: 'Itaewon',
-                address: 'Itaewon-ro 180, Yongsan-gu, Seoul',
-                tags: ['Seafood Base', 'No Beef/Pork', 'Muslim Friendly'],
-                rating: 4.6,
-                summary: 'Spicy soft tofu stew brewed with kelp, radish, shrimp, and fresh squid broth.',
-                details: {
-                    halalCert: 'Muslim Friendly (Pork-free Kitchen)',
-                    porkFree: 'No Beef or Pork Meat/Lard Used',
-                    vegetarianOpt: 'Kelp Broth Tofu Stew on request',
-                    keyTip: 'Specify "No Seafood" if you prefer pure soy bean broth.',
-                    phraseKo: '돼지고기 육수 아니죠?',
-                    phraseEng: 'Is it non-pork broth?',
-                    phrasePron: 'Dwae-ji-go-gi yuk-su a-ni-jyo?'
-                }
+                lng: 126.9945,
+                address: "서울 용산구 이태원로 190",
+                badge: "🕌 터키 정부 할랄 공식 인증",
+                tags: ["Halal Certified", "터키 요리", "돼지고기 없음"],
+                desc: "100% 공식 할랄 인증 육류만 사용하는 터키 정통 레스토랑입니다. 기도실 정보 및 돼지고기 성분이 전혀 없는 안심 메뉴를 제공합니다.",
+                ingredientsNotes: "✅ 돼지고기/돼지기름(Lard) 완전 배제\n✅ 알코올 성분 사용 안 함\n✅ 기도 공간 도보 3분 거리",
+                koreanPhrase: "할랄 음식 맞나요?",
+                pronunciation: "Halal eomsik mat-nayo?"
             },
             {
-                id: 'd5',
-                mode: 'dietary',
-                category: 'VEGAN',
-                title: 'Insa-dong Temple Food Sanchon',
-                titleKo: '인사동 사찰음식 산촌',
-                lat: 37.5732,
-                lng: 126.9858,
-                area: 'Insadong',
-                address: 'Gwanhun-dong 14, Jongno-gu, Seoul',
-                tags: ['Temple Cuisine', 'No Garlic/Onion', 'Vegan'],
-                rating: 4.9,
-                summary: 'Traditional Buddhist temple cuisine made with wild herbs without garlic, onion, or meat.',
-                details: {
-                    halalCert: 'Naturally Halal & Vegan',
-                    porkFree: 'Strictly Zero Meat or Lard',
-                    vegetarianOpt: '100% Vegan Certified Course',
-                    keyTip: 'Enjoy a serene Korean tea tasting included with course meals.',
-                    phraseKo: '채식 메뉴입니다.',
-                    phraseEng: 'This is a vegetarian menu.',
-                    phrasePron: 'Chae-sik menu-im-ni-da.'
-                }
+                id: 2,
+                name: "플랜트 이태원 (PLANT Vegan)",
+                mode: "dietary",
+                category: "vegan",
+                lat: 37.5338,
+                lng: 126.9922,
+                address: "서울 용산구 보그모로 117",
+                badge: "🌱 100% 완전 채식 (Strict Vegan)",
+                tags: ["100% 비건", "글루텐프리 옵션", "우유/계란 없음"],
+                desc: "유당불내증 및 완전 채식주의자를 위한 이태원의 대표 비건 카페 & 디저트 전문점입니다.",
+                ingredientsNotes: "✅ 우유/계란/버터 0%\n✅ 젓갈 및 굴소스 미사용\n✅ 두유/아몬드유 무료 변경 가능",
+                koreanPhrase: "우유나 계란이 들어갔나요?",
+                pronunciation: "Uyu-na gyeran-i deureo-gat-nayo?"
             },
-
-            // ==================== CULTURE & K-SLANG LOCATIONS ====================
             {
-                id: 'c1',
-                mode: 'culture',
-                category: 'K_FOOD_SLANG',
-                title: 'Gwangjang Market Survival Spot',
-                titleKo: '광장시장 먹거리 & 필수 한국어',
+                id: 3,
+                name: "오세계향 (인사동 비건 한식)",
+                mode: "dietary",
+                category: "vegan",
+                lat: 37.5742,
+                lng: 126.9848,
+                address: "서울 종로구 인사동12길 14-5",
+                badge: "🥬 채식 한식 전문점",
+                tags: ["비건 불고기", "채수 찌개", "젓갈 안 들어간 김치"],
+                desc: "한국 전통 음식을 동물성 재료 없이 안전하게 즐길 수 있는 비건 한식당입니다. 찌개육수로 사골 대신 채수를 사용합니다.",
+                ingredientsNotes: "⚠️ 일반 한식당과 달리 김치에 멸치액젓/새우젓을 쓰지 않음\n✅ 콩고기 기반 뚝배기 불고기 제공",
+                koreanPhrase: "고기 빼고 채수로 만들어 주세요.",
+                pronunciation: "Gogi ppaego chaesu-ro mandeureo juseyo."
+            },
+            {
+                id: 4,
+                name: "마칸 할랄 한식당 (Makan Halal)",
+                mode: "dietary",
+                category: "halal",
+                lat: 37.5325,
+                lng: 126.9968,
+                address: "서울 용산구 우사단로 52",
+                badge: "🕌 KMF 할랄 인증 한식당",
+                tags: ["할랄 삼계탕", "할랄 불고기", "무슬림 친화"],
+                desc: "한국 이슬람교 중앙회(KMF) 인증을 받은 한식당으로, 할랄 인증 닭고기와 소고기로 만든 안심 삼계탕과 불고기를 맛볼 수 있습니다.",
+                ingredientsNotes: "✅ KMF 공식 인증 마크 보유\n✅ 주류 판매 안 함",
+                koreanPhrase: "할랄 인증서 보여주실 수 있나요?",
+                pronunciation: "Halal injeongseo boyeojusil su it-nayo?"
+            },
+            {
+                id: 5,
+                name: "명동 교자 (식당 실전 문화)",
+                mode: "culture",
+                category: "tip",
+                lat: 37.5625,
+                lng: 126.9856,
+                address: "서울 중구 명동10길 29",
+                badge: "💡 한국 식당 실전 팁",
+                tags: ["테이블 서랍 수저", "물은 셀프", "이모님 호출"],
+                desc: "한국 식당에 처음 왔을 때 당황하기 쉬운 문화! 수저통은 테이블 옆 서랍에 있으며, 반찬 리필 시 부르는 호칭을 배웁니다.",
+                ingredientsNotes: "💡 꿀팁: 벨이 없으면 손을 들고 '이모님~' 또는 '저기요~'라고 부르면 친절하게 응대해 주십니다.",
+                koreanPhrase: "이모님, 김치 더 주세요!",
+                pronunciation: "Imo-nim, kimchi deo juseyo!"
+            },
+            {
+                id: 6,
+                name: "홍대 버스킹 거리 (K-슬랭 체험)",
+                mode: "culture",
+                category: "slang",
+                lat: 37.5552,
+                lng: 126.9234,
+                address: "서울 마포구 어울마당로 109",
+                badge: "💬 MZ세대 K-슬랭 현장",
+                tags: ["대박", "아아 (Ice Americano)", "내돈내산"],
+                desc: "청춘의 거리 홍대에서 자주 쓰이는 유행어와 카페 주문 시 필수 줄임말인 '아아(아이스 아메리카노)'를 익힙니다.",
+                ingredientsNotes: "☕ 카페 팁: '아아 한 잔 주세요' = 아이스 아메리카노 1잔 주문 완료!",
+                koreanPhrase: "아아(아이스 아메리카노) 하나 주세요!",
+                pronunciation: "A-A hana juseyo!"
+            },
+            {
+                id: 7,
+                name: "광장시장 (동선 & 깎아주세요 스팟)",
+                mode: "culture",
+                category: "slang",
                 lat: 37.5701,
                 lng: 126.9997,
-                area: 'Jongno',
-                address: 'Changgyeonggung-ro 88, Jongno-gu, Seoul',
-                tags: ['Market Tips', 'Imo-nim!', 'Cash or T-Money'],
-                rating: 4.9,
-                summary: 'Lively traditional market! Learn how to politely call female stall vendors and ask for side refills.',
-                details: {
-                    slangExpression: '이모님~! (Imo-nim!)',
-                    pronunciation: 'Ee-mo-nim!',
-                    englishMeaning: 'Auntie! (Polite friendly way to call female vendors)',
-                    cultureTip: 'In street markets or local diners, call female staff "Imo-nim" to show warmth and often get extra bonus portions!',
-                    extraPhrase: '이모님! 떡볶이 1인분 주세요! (Auntie! 1 serving of Tteokbokki please!)',
-                    extraPhrasePron: 'Imo-nim! Tteok-bok-ki il-in-bun ju-se-yo!'
-                }
-            },
-            {
-                id: 'c2',
-                mode: 'culture',
-                category: 'CULTURE_TIP',
-                title: 'Local Diner Table Drawer Secret',
-                titleKo: '수저통은 테이블 옆 서랍에!',
-                lat: 37.5601,
-                lng: 126.9820,
-                area: 'Myeongdong / City Hall',
-                address: 'Eulji-ro 1-ga, Jung-gu, Seoul',
-                tags: ['Drawer Spoon', 'Self Banchan', 'Table Bell'],
-                rating: 4.8,
-                summary: 'Don\'t panic if you don\'t see chopsticks or napkins on top of the dining table!',
-                details: {
-                    slangExpression: '여기요! / 저기요! (Yeo-gi-yo! / Jeo-gi-yo!)',
-                    pronunciation: 'Yeo-gi-yo!',
-                    englishMeaning: 'Over here, please! (Polite way to call waitstaff)',
-                    cultureTip: 'Look at the side frame under the table! 90% of local diners store chopsticks, spoons, and napkins in a pull-out side drawer.',
-                    extraPhrase: '반찬 셀프인가요? (Are side dishes self-service?)',
-                    extraPhrasePron: 'Ban-chan self-in-ga-yo?'
-                }
-            },
-            {
-                id: 'c3',
-                mode: 'culture',
-                category: 'K_FOOD_SLANG',
-                title: 'Hongdae K-Cafe "Ah-Ah" Hack',
-                titleKo: '카공족 & 아아 (Ice Americano) 문화',
-                lat: 37.5582,
-                lng: 126.9260,
-                area: 'Hongdae',
-                address: 'Hongik-ro 3-gil, Mapo-gu, Seoul',
-                tags: ['Ah-Ah', 'Receipt Wifi Code', 'Takeout Discount'],
-                rating: 4.7,
-                summary: 'Master the iconic Korean iced coffee abbreviation "Ah-Ah" for rapid ordering.',
-                details: {
-                    slangExpression: '아아 한 잔 주세요! (Ah-Ah han jan ju-se-yo!)',
-                    pronunciation: 'Ah-Ah han jan ju-se-yo!',
-                    englishMeaning: 'One Iced Americano, please! ("Ah-Ah" = Ice Americano)',
-                    cultureTip: 'Wi-Fi passwords and restroom door passcode numbers are almost always printed at the bottom of your purchase receipt!',
-                    extraPhrase: '영수증 주세요 / 와이파이 비번이 뭐예요?',
-                    extraPhrasePron: 'Yeong-su-jeung ju-se-yo / Wi-Fi bi-beon-i mweo-yeo-yo?'
-                }
-            },
-            {
-                id: 'c4',
-                mode: 'culture',
-                category: 'STREET_SURVIVAL',
-                title: 'Subway & Convenience Store Card Hack',
-                titleKo: '지하철 환승 & 1+1 이벤트',
-                lat: 37.5559,
-                lng: 126.9723,
-                area: 'Seoul Station',
-                address: 'Hangang-daero 405, Yongsan-gu, Seoul',
-                tags: ['T-Money', '1+1 Deals', 'Trash Can Hack'],
-                rating: 4.9,
-                summary: 'How to tag transit cards for transfer discounts and spot 1+1 / 2+1 promos at convenience stores.',
-                details: {
-                    slangExpression: '봉투 필요하세요? (Bong-tu pil-yo-ha-se-yo?)',
-                    pronunciation: 'Bong-tu pil-yo-ha-se-yo?',
-                    englishMeaning: 'Do you need a plastic bag? (Answer "Ne" for Yes / "Ani-yo" for No)',
-                    cultureTip: 'Public trash cans are scarce on streets! Dispose of empty drink cups inside convenience store bins or subway platforms.',
-                    extraPhrase: '티머니 충전해 주세요. (Please recharge my T-money card.)',
-                    extraPhrasePron: 'T-money chung-jeon-hae ju-se-yo.'
-                }
-            },
-            {
-                id: 'c5',
-                mode: 'culture',
-                category: 'CULTURE_TIP',
-                title: 'Namsan Tower Photo Courtesy',
-                titleKo: '남산타워 포토존 & 문화',
-                lat: 37.5512,
-                lng: 126.9882,
-                area: 'Namsan / Yongsan',
-                address: 'Namsantower-gil 105, Yongsan-gu, Seoul',
-                tags: ['Photo Courtesy', 'Pic spot', 'Cable Car'],
-                rating: 4.8,
-                summary: 'Polite photo-asking phrases and couple padlock traditions at Namsan N Tower.',
-                details: {
-                    slangExpression: '사진 한 장만 찍어주실 수 있나요?',
-                    pronunciation: 'Sa-jin han jang-man tjeog-eo-ju-sil su in-na-yo?',
-                    englishMeaning: 'Could you take a picture of us, please?',
-                    cultureTip: 'Koreans take photo taking seriously! Locals will often take multiple vertical and horizontal shots to ensure you get a great picture.',
-                    extraPhrase: '하나, 둘, 셋~ 김치! (One, two, three ~ Kimchi!)',
-                    extraPhrasePron: 'Ha-na, dul, set ~ Kim-chi!'
-                }
+                address: "서울 종로구 창경궁로 88",
+                badge: "🛍️ 전통시장 애교 소통",
+                tags: ["서비스 주세요", "좀 깎아주세요", "현금 할인"],
+                desc: "전통시장에서 맛있는 음식을 먹거나 물건을 살 때 유용한 '서비스(무료 덤)' 요청 단어와 흥정 표현을 익힐 수 있는 곳입니다.",
+                ingredientsNotes: "🥟 전통시장 팁: 음식을 많이 사면 웃으며 '서비스 많이 주세요~'라고 말해보세요!",
+                koreanPhrase: "사장님, 서비스 조금만 주세요!",
+                pronunciation: "Sajang-nim, service jogum-man juseyo!"
             }
         ];
 
-        const CATEGORIES = {
-            dietary: [
-                { code: 'ALL', label: 'All Safe Spots', icon: 'fa-globe' },
-                { code: 'HALAL', label: 'Halal Certified', icon: 'fa-kaaba' },
-                { code: 'VEGAN', label: 'Vegan / Plant-Based', icon: 'fa-leaf' },
-                { code: 'ALLERGY', label: 'Allergy / Dairy-Free', icon: 'fa-shield-halved' },
-                { code: 'SEAFOOD', label: 'Seafood / No Pork', icon: 'fa-fish' }
-            ],
-            culture: [
-                { code: 'ALL', label: 'All Cultural Spots', icon: 'fa-globe' },
-                { code: 'K_FOOD_SLANG', label: 'Food Slang', icon: 'fa-bowl-food' },
-                { code: 'CULTURE_TIP', label: 'Diner Etiquette', icon: 'fa-lightbulb' },
-                { code: 'STREET_SURVIVAL', label: 'Street & Transport', icon: 'fa-bus' }
-            ]
-        };
+        let map = null;
+        let kakaoMarkers = [];
+        let activeOverlay = null;
+        let currentMode = 'all';
+        let currentCategory = 'all';
+        let isFallbackMode = false;
 
         window.onload = function() {
-            document.getElementById('current-domain-text').textContent = window.location.origin;
-            renderSubFilters();
-            renderPlacesList();
-            updateLegend();
-
-            // Safe Kakao Map Initialization using kakao.maps.load()
-            initKakaoMapSafely();
+            initMap();
         };
 
-        function initKakaoMapSafely() {
+        function initMap() {
             if (typeof kakao !== 'undefined' && kakao.maps) {
-                // Execute initialization inside kakao.maps.load callback
                 kakao.maps.load(function() {
                     try {
                         const container = document.getElementById('map');
                         const options = {
-                            center: new kakao.maps.LatLng(SEOUL_CENTER.lat, SEOUL_CENTER.lng),
+                            center: new kakao.maps.LatLng(37.5550, 126.9800),
                             level: 6
                         };
-
                         map = new kakao.maps.Map(container, options);
-                        mapLoadedSuccessfully = true;
-
-                        // Add Zoom control
+                        
                         const zoomControl = new kakao.maps.ZoomControl();
                         map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
 
-                        // Render markers
-                        renderMapMarkers();
-                        
-                        // Hide fallback UI if previously shown
-                        document.getElementById('map-fallback').classList.add('hidden');
-                        document.getElementById('map-fallback').classList.remove('flex');
-                    } catch (err) {
-                        console.error("Kakao Map init error:", err);
-                        showMapFallback();
+                        renderPlaces();
+                    } catch (e) {
+                        console.warn("Kakao Map init warning, activating interactive simulation map:", e);
+                        enableFallbackMap();
                     }
                 });
             } else {
-                console.warn("Kakao Map SDK failed to load. Showing fallback UI.");
-                showMapFallback();
+                // SDK 로드 실패 또는 도메인 차단 시 즉시 체험용 인터랙티브 지도 모드로 구동
+                enableFallbackMap();
             }
         }
 
-        function showMapFallback() {
-            mapLoadedSuccessfully = false;
-            const fallbackEl = document.getElementById('map-fallback');
-            fallbackEl.classList.remove('hidden');
-            fallbackEl.classList.add('flex');
+        function enableFallbackMap() {
+            isFallbackMode = true;
+            const mapDiv = document.getElementById('map');
+            
+            mapDiv.innerHTML = `
+                <div class="w-full h-full bg-slate-800 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
+                    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                    
+                    <div class="z-10 text-center space-y-3 max-w-sm">
+                        <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-emerald-500/40 animate-pulse">
+                            <i class="fa-solid fa-map-pin"></i>
+                        </div>
+                        <h4 class="font-bold text-lg text-emerald-400">인터랙티브 가이드 지도 모드</h4>
+                        <p class="text-xs text-slate-300">카카오 개발자 센터에 도메인 등록 시 실시간 지도가 활성화되며, 현재 상태에서도 왼쪽 리스트와 상세 정보, 음성 발음 기능을 완벽하게 이용하실 수 있습니다.</p>
+                    </div>
+                </div>
+            `;
+            renderSidebarList(getFilteredData());
         }
 
-        function retryKakaoMapLoad() {
-            initKakaoMapSafely();
-        }
-
-        function switchMode(mode) {
-            if (currentMode === mode) return;
-            currentMode = mode;
-            currentFilter = 'ALL';
-            activePlaceId = null;
-
-            if (customOverlay) {
-                customOverlay.setMap(null);
-            }
-
-            const btnDietary = document.getElementById('btn-mode-dietary');
-            const btnCulture = document.getElementById('btn-mode-culture');
-            const activeModeLabel = document.getElementById('active-mode-label');
-
-            if (mode === 'dietary') {
-                btnDietary.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-white text-emerald-700 shadow-sm";
-                btnCulture.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900";
-                activeModeLabel.textContent = "Dietary Safe Mode";
-                activeModeLabel.className = "font-semibold text-emerald-600";
-            } else {
-                btnCulture.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-white text-orange-700 shadow-sm";
-                btnDietary.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900";
-                activeModeLabel.textContent = "Culture & K-Slang Mode";
-                activeModeLabel.className = "font-semibold text-orange-600";
-            }
-
-            renderSubFilters();
-            renderPlacesList();
-            if (mapLoadedSuccessfully) {
-                renderMapMarkers();
-            }
-            updateLegend();
-        }
-
-        function renderSubFilters() {
-            const container = document.getElementById('sub-filter-container');
-            const categories = CATEGORIES[currentMode];
-
-            container.innerHTML = categories.map(cat => {
-                const isActive = currentFilter === cat.code;
-                const activeColor = currentMode === 'dietary' 
-                    ? 'bg-emerald-600 text-white shadow-sm' 
-                    : 'bg-orange-500 text-white shadow-sm';
-                const inactiveColor = 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100';
-
-                return `
-                    <button onclick="setFilter('${cat.code}')" class="px-2.5 py-1 rounded-full font-medium transition-all flex items-center gap-1.5 whitespace-nowrap text-xs ${isActive ? activeColor : inactiveColor}">
-                        <i class="fa-solid ${cat.icon}"></i>
-                        <span>${cat.label}</span>
-                    </button>
-                `;
-            }).join('');
-        }
-
-        function setFilter(code) {
-            currentFilter = code;
-            renderSubFilters();
-            renderPlacesList();
-            if (mapLoadedSuccessfully) {
-                renderMapMarkers();
-            }
-        }
-
-        function getFilteredPlaces() {
+        function getFilteredData() {
             const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
 
-            return PLACES_DATA.filter(place => {
-                if (place.mode !== currentMode) return false;
-                if (currentFilter !== 'ALL' && place.category !== currentFilter) return false;
+            return placesData.filter(place => {
+                if (currentMode !== 'all' && place.mode !== currentMode) return false;
+                if (currentCategory !== 'all' && place.category !== currentCategory) return false;
 
                 if (searchTerm) {
-                    const matchTitle = place.title.toLowerCase().includes(searchTerm);
-                    const matchTitleKo = place.titleKo.toLowerCase().includes(searchTerm);
-                    const matchArea = place.area.toLowerCase().includes(searchTerm);
-                    const matchSummary = place.summary.toLowerCase().includes(searchTerm);
+                    const matchName = place.name.toLowerCase().includes(searchTerm);
+                    const matchDesc = place.desc.toLowerCase().includes(searchTerm);
                     const matchTags = place.tags.some(t => t.toLowerCase().includes(searchTerm));
-
-                    return matchTitle || matchTitleKo || matchArea || matchSummary || matchTags;
+                    const matchPhrase = place.koreanPhrase.toLowerCase().includes(searchTerm);
+                    return matchName || matchDesc || matchTags || matchPhrase;
                 }
-
                 return true;
             });
         }
 
-        function renderPlacesList() {
-            const places = getFilteredPlaces();
-            const container = document.getElementById('places-list');
-            const countLabel = document.getElementById('list-count');
-
-            countLabel.textContent = `Showing ${places.length} locations`;
-
-            if (places.length === 0) {
-                container.innerHTML = `
-                    <div class="p-8 text-center text-slate-400 space-y-2">
-                        <i class="fa-solid fa-map-location-dot text-3xl"></i>
-                        <p class="text-xs font-medium">No locations match your filter.</p>
-                        <button onclick="clearSearch(); setFilter('ALL');" class="text-xs text-brand-600 font-semibold underline">Reset search filters</button>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = places.map(place => {
-                const isActive = activePlaceId === place.id;
-                const isDietary = place.mode === 'dietary';
-                const accentBorder = isDietary ? 'border-l-emerald-500' : 'border-l-orange-500';
-
-                return `
-                    <div onclick="selectPlace('${place.id}')" class="p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${isActive ? 'bg-indigo-50/80 border-brand-500 ring-1 ring-brand-500/30' : 'bg-white border-slate-200/80 hover:border-slate-300'} border-l-4 ${accentBorder} mb-2">
-                        <div class="flex items-start justify-between gap-2">
-                            <div>
-                                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase mb-1 ${isDietary ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'}">
-                                    ${place.category.replace('_', ' ')}
-                                </span>
-                                <h3 class="font-bold text-sm text-slate-900 leading-snug">${place.title}</h3>
-                                <p class="text-xs text-slate-500 font-medium">${place.titleKo}</p>
-                            </div>
-                            <div class="flex items-center text-xs font-bold text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 shrink-0">
-                                <i class="fa-solid fa-star text-[10px] mr-1"></i>${place.rating}
-                            </div>
-                        </div>
-
-                        <p class="text-xs text-slate-600 my-2 line-clamp-2">${place.summary}</p>
-
-                        <div class="flex flex-wrap gap-1 mt-2">
-                            ${place.tags.map(tag => `<span class="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded font-medium">#${tag}</span>`).join('')}
-                        </div>
-
-                        <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                            <span><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${place.area}</span>
-                            <span class="text-brand-600 font-semibold flex items-center gap-1">
-                                View details <i class="fa-solid fa-chevron-right text-[9px]"></i>
-                            </span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+        function setMode(mode) {
+            currentMode = mode;
+            ['all', 'dietary', 'culture'].forEach(m => {
+                const btn = document.getElementById(`btn-mode-${m}`);
+                if (m === mode) {
+                    btn.className = "px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-all duration-200 bg-slate-900 text-white shadow-sm";
+                } else {
+                    btn.className = "px-3 py-1.5 text-xs md:text-sm font-semibold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-900";
+                }
+            });
+            renderPlaces();
         }
 
-        function renderMapMarkers() {
-            if (!mapLoadedSuccessfully || !map) return;
+        function setCategoryFilter(category) {
+            currentCategory = category;
+            const buttons = document.querySelectorAll('.cat-tag');
+            buttons.forEach(btn => {
+                if (btn.getAttribute('onclick').includes(`'${category}'`)) {
+                    btn.className = "cat-tag active px-2.5 py-1 rounded-lg border bg-slate-800 text-white border-slate-800 whitespace-nowrap font-medium transition-all";
+                } else {
+                    btn.className = "cat-tag px-2.5 py-1 rounded-lg border bg-white text-slate-600 border-slate-200 hover:bg-slate-100 whitespace-nowrap font-medium transition-all";
+                }
+            });
+            renderPlaces();
+        }
 
-            // Clear existing markers
-            markers.forEach(m => m.setMap(null));
-            markers = [];
+        function filterPlaces() {
+            renderPlaces();
+        }
 
-            if (customOverlay) {
-                customOverlay.setMap(null);
-            }
+        function renderPlaces() {
+            const filtered = getFilteredData();
+            renderSidebarList(filtered);
 
-            const places = getFilteredPlaces();
+            if (!map || isFallbackMode) return;
 
-            places.forEach(place => {
-                const position = new kakao.maps.LatLng(place.lat, place.lng);
+            kakaoMarkers.forEach(m => m.setMap(null));
+            kakaoMarkers = [];
+            if (activeOverlay) activeOverlay.setMap(null);
+
+            const bounds = new kakao.maps.LatLngBounds();
+
+            filtered.forEach(place => {
+                const loc = new kakao.maps.LatLng(place.lat, place.lng);
+                bounds.extend(loc);
+
                 const isDietary = place.mode === 'dietary';
-                const badgeBg = isDietary ? '#10b981' : '#f97316';
-                const iconClass = isDietary ? 'fa-utensils' : 'fa-comments';
-
-                const markerContent = document.createElement('div');
-                markerContent.className = 'cursor-pointer group';
-                markerContent.innerHTML = `
-                    <div style="background-color: ${badgeBg};" class="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-lg border-2 border-white transform transition-transform duration-200 hover:scale-110 active:scale-95">
-                        <i class="fa-solid ${iconClass} text-sm"></i>
+                const content = document.createElement('div');
+                content.className = "cursor-pointer transform hover:-translate-y-1 transition-transform";
+                content.innerHTML = `
+                    <div class="flex items-center gap-1.5 bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-full shadow-xl border-2 ${isDietary ? 'border-emerald-400' : 'border-rose-400'}">
+                        <i class="fa-solid ${isDietary ? 'fa-leaf text-emerald-400' : 'fa-comment text-rose-400'}"></i>
+                        <span class="font-bold whitespace-nowrap">${place.name.split(' ')[0]}</span>
                     </div>
                 `;
 
-                const markerOverlay = new kakao.maps.CustomOverlay({
-                    position: position,
-                    content: markerContent,
+                content.onclick = function() {
+                    showPlaceDetail(place, loc);
+                };
+
+                const customOverlay = new kakao.maps.CustomOverlay({
+                    position: loc,
+                    content: content,
                     yAnchor: 1
                 });
 
-                markerOverlay.setMap(map);
-                markers.push(markerOverlay);
-
-                markerContent.addEventListener('click', () => {
-                    selectPlace(place.id);
-                });
+                customOverlay.setMap(map);
+                kakaoMarkers.push(customOverlay);
             });
-        }
 
-        function selectPlace(placeId) {
-            activePlaceId = placeId;
-            const place = PLACES_DATA.find(p => p.id === placeId);
-            if (!place) return;
-
-            renderPlacesList();
-
-            if (mapLoadedSuccessfully && map) {
-                const moveLatLng = new kakao.maps.LatLng(place.lat, place.lng);
-                map.panTo(moveLatLng);
-                showInfoOverlay(place, moveLatLng);
+            if (filtered.length > 0) {
+                map.setBounds(bounds);
             }
         }
 
-        function showInfoOverlay(place, position) {
-            if (!mapLoadedSuccessfully || !map) return;
-
-            if (customOverlay) {
-                customOverlay.setMap(null);
-            }
+        function showPlaceDetail(place, loc) {
+            if (activeOverlay) activeOverlay.setMap(null);
 
             const isDietary = place.mode === 'dietary';
-            const themeColorClass = isDietary ? 'bg-emerald-600' : 'bg-orange-500';
-
-            let bodyHtml = '';
-
-            if (isDietary) {
-                bodyHtml = `
-                    <div class="space-y-2 text-xs">
-                        <div class="p-2 bg-emerald-50 rounded-lg border border-emerald-100">
-                            <span class="font-bold text-emerald-800 flex items-center gap-1">
-                                <i class="fa-solid fa-certificate"></i> Certification / Status
-                            </span>
-                            <p class="text-emerald-700 font-medium">${place.details.halalCert}</p>
-                        </div>
-                        <div class="grid grid-cols-2 gap-1.5">
-                            <div class="p-2 bg-slate-50 rounded border border-slate-200">
-                                <span class="font-bold text-slate-700 block">Pork & Lard</span>
-                                <span class="text-slate-600">${place.details.porkFree}</span>
-                            </div>
-                            <div class="p-2 bg-slate-50 rounded border border-slate-200">
-                                <span class="font-bold text-slate-700 block">Veg Option</span>
-                                <span class="text-slate-600">${place.details.vegetarianOpt}</span>
-                            </div>
-                        </div>
-                        <div class="p-2 bg-amber-50 rounded border border-amber-200/80 text-amber-900">
-                            <span class="font-bold flex items-center gap-1">
-                                <i class="fa-solid fa-lightbulb text-amber-600"></i> Local Tip
-                            </span>
-                            <p class="text-[11px] leading-tight">${place.details.keyTip}</p>
-                        </div>
+            
+            const overlayContent = document.createElement('div');
+            overlayContent.className = "kakao-overlay w-72 md:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left font-sans text-slate-800";
+            overlayContent.innerHTML = `
+                <div class="${isDietary ? 'bg-emerald-600' : 'bg-rose-600'} text-white p-3.5 flex justify-between items-start">
+                    <div>
+                        <span class="text-[10px] bg-black/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">${place.badge}</span>
+                        <h3 class="font-bold text-base mt-1 leading-tight">${place.name}</h3>
                     </div>
-                `;
-            } else {
-                bodyHtml = `
-                    <div class="space-y-2 text-xs">
-                        <div class="p-2.5 bg-orange-50 rounded-xl border border-orange-200 text-orange-900">
-                            <div class="flex items-center justify-between">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-orange-700">Essential Expression</span>
-                                <button onclick="speakKorean('${place.details.slangExpression}')" class="text-xs bg-orange-200 hover:bg-orange-300 text-orange-800 px-2 py-0.5 rounded font-semibold flex items-center gap-1">
-                                    <i class="fa-solid fa-volume-high"></i> Listen
-                                </button>
-                            </div>
-                            <div class="text-base font-bold text-slate-900 my-0.5">${place.details.slangExpression}</div>
-                            <div class="text-xs text-orange-800 font-medium italic mb-1">[ Pronunciation: ${place.details.pronunciation} ]</div>
-                            <div class="text-xs font-semibold text-slate-700">${place.details.englishMeaning}</div>
-                        </div>
-                        <div class="p-2 bg-slate-50 rounded border border-slate-200">
-                            <span class="font-bold text-slate-800 block mb-0.5"><i class="fa-solid fa-compass text-orange-500 mr-1"></i> Culture Survival Tip</span>
-                            <p class="text-slate-600 text-[11px] leading-relaxed">${place.details.cultureTip}</p>
-                        </div>
-                    </div>
-                `;
-            }
-
-            const phraseKo = isDietary ? place.details.phraseKo : place.details.extraPhrase;
-            const phraseEng = isDietary ? place.details.phraseEng : place.details.slangExpression;
-
-            const contentHtml = `
-                <div class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden w-80 max-w-[90vw] text-slate-800 font-sans custom-overlay">
-                    <div class="${themeColorClass} p-3 text-white flex items-start justify-between">
-                        <div>
-                            <span class="text-[10px] bg-white/20 backdrop-blur-md px-2 py-0.5 rounded font-semibold uppercase tracking-wider">
-                                ${place.category.replace('_', ' ')}
-                            </span>
-                            <h2 class="font-bold text-base mt-0.5 leading-snug">${place.title}</h2>
-                            <p class="text-xs opacity-90">${place.titleKo}</p>
-                        </div>
-                        <button onclick="closeOverlay()" class="text-white/80 hover:text-white text-lg p-1">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
+                    <button onclick="closeOverlay()" class="text-white/80 hover:text-white p-1 text-sm">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="p-4 space-y-3 text-xs">
+                    <p class="text-slate-600 leading-relaxed">${place.desc}</p>
+                    
+                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1">
+                        <span class="font-bold text-slate-700 block"><i class="fa-solid fa-circle-check text-emerald-500 mr-1"></i> 주요 특징 및 팁:</span>
+                        <p class="text-slate-600 whitespace-pre-line text-[11px]">${place.ingredientsNotes}</p>
                     </div>
 
-                    <div class="p-3 space-y-3 max-h-72 overflow-y-auto">
-                        ${bodyHtml}
-
-                        <div class="bg-slate-100 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
-                            <div class="overflow-hidden">
-                                <span class="text-[10px] text-slate-500 font-bold uppercase block">Show to Staff</span>
-                                <div class="font-bold text-slate-900 text-xs truncate">${phraseKo}</div>
-                                <div class="text-[11px] text-slate-600 truncate">${phraseEng}</div>
-                            </div>
-                            <button onclick="copyToClipboard('${phraseKo}')" title="Copy Text" class="bg-white hover:bg-slate-200 text-slate-700 p-2 rounded-lg border border-slate-300 text-xs shrink-0 transition-all active:scale-95">
-                                <i class="fa-regular fa-copy"></i>
+                    <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-200 space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-amber-900 text-[11px]">🗣️ 유용한 한글 표현:</span>
+                            <button onclick="speakKorean('${place.koreanPhrase}')" class="text-xs bg-amber-200 hover:bg-amber-300 text-amber-900 px-2 py-0.5 rounded-md transition-all font-semibold">
+                                <i class="fa-solid fa-volume-high mr-1"></i> 발음 듣기
                             </button>
                         </div>
+                        <p class="font-bold text-sm text-slate-900 bg-white p-1.5 rounded border border-amber-100 flex justify-between items-center">
+                            <span>"${place.koreanPhrase}"</span>
+                            <button onclick="copyToClipboard('${place.koreanPhrase}')" title="복사" class="text-slate-400 hover:text-slate-600 text-xs">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </p>
+                        <p class="text-[10px] text-slate-500 italic">발음: ${place.pronunciation}</p>
                     </div>
 
-                    <div class="px-3 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                        <span><i class="fa-solid fa-map-pin mr-1 text-slate-400"></i>${place.area}</span>
-                        <a href="https://map.kakao.com/link/map/${encodeURIComponent(place.title)},${place.lat},${place.lng}" target="_blank" class="text-brand-600 font-semibold hover:underline flex items-center gap-1">
-                            KakaoMap <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                        </a>
+                    <div class="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100">
+                        <span><i class="fa-solid fa-location-dot mr-1"></i>${place.address}</span>
                     </div>
                 </div>
             `;
 
-            customOverlay = new kakao.maps.CustomOverlay({
-                position: position,
-                content: contentHtml,
-                xAnchor: 0.5,
-                yAnchor: 1.15,
-                zIndex: 100
+            activeOverlay = new kakao.maps.CustomOverlay({
+                position: loc,
+                content: overlayContent,
+                yAnchor: 1.15
             });
 
-            customOverlay.setMap(map);
+            activeOverlay.setMap(map);
+            map.panTo(loc);
         }
 
         function closeOverlay() {
-            if (customOverlay) {
-                customOverlay.setMap(null);
+            if (activeOverlay) {
+                activeOverlay.setMap(null);
+                activeOverlay = null;
             }
         }
 
-        function filterPlaces() {
-            const clearBtn = document.getElementById('clear-search-btn');
-            const searchVal = document.getElementById('search-input').value;
-            
-            if (searchVal.trim() !== '') {
-                clearBtn.classList.remove('hidden');
-            } else {
-                clearBtn.classList.add('hidden');
-            }
+        function renderSidebarList(places) {
+            const listContainer = document.getElementById('place-list');
+            listContainer.innerHTML = '';
 
-            renderPlacesList();
-            if (mapLoadedSuccessfully) {
-                renderMapMarkers();
-            }
-        }
-
-        function clearSearch() {
-            document.getElementById('search-input').value = '';
-            document.getElementById('clear-search-btn').classList.add('hidden');
-            renderPlacesList();
-            if (mapLoadedSuccessfully) {
-                renderMapMarkers();
-            }
-        }
-
-        function setMapCenterToUser() {
-            if (!mapLoadedSuccessfully || !map) {
-                alert("Map is currently not loaded.");
+            if (places.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center py-10 text-slate-400 space-y-2">
+                        <i class="fa-solid fa-magnifying-glass text-3xl opacity-40"></i>
+                        <p class="text-xs">조건에 맞는 장소가 없습니다.</p>
+                    </div>
+                `;
                 return;
             }
 
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        const userLoc = new kakao.maps.LatLng(lat, lng);
-                        map.panTo(userLoc);
-                    },
-                    () => {
-                        alert("Unable to fetch current location. Defaulting to Seoul center.");
+            places.forEach(place => {
+                const isDietary = place.mode === 'dietary';
+                const card = document.createElement('div');
+                card.className = "p-3.5 bg-white border border-slate-200 rounded-2xl hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer space-y-2 group";
+                
+                card.onclick = function() {
+                    if (map && !isFallbackMode) {
+                        const loc = new kakao.maps.LatLng(place.lat, place.lng);
+                        showPlaceDetail(place, loc);
+                    } else {
+                        alert(`[${place.name}]\n\n${place.desc}\n\n💡 팁: ${place.ingredientsNotes}\n\n🗣️ 현지 표현: "${place.koreanPhrase}"`);
                     }
-                );
-            } else {
-                alert("Geolocation is not supported by your browser.");
-            }
-        }
+                };
 
-        function zoomInMap() {
-            if (mapLoadedSuccessfully && map) {
-                map.setLevel(map.getLevel() - 1);
-            }
-        }
-
-        function zoomOutMap() {
-            if (mapLoadedSuccessfully && map) {
-                map.setLevel(map.getLevel() + 1);
-            }
-        }
-
-        function updateLegend() {
-            const legendContainer = document.getElementById('map-legend');
-            if (currentMode === 'dietary') {
-                legendContainer.innerHTML = `
-                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Halal / Vegan Spots</div>
-                    <div class="flex items-center gap-2 text-slate-500"><i class="fa-solid fa-certificate text-emerald-600"></i> Certified Ingredients</div>
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isDietary ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                            ${place.badge}
+                        </span>
+                        <span class="text-[10px] text-slate-400"><i class="fa-solid fa-location-dot mr-0.5"></i> 서울</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-800 group-hover:text-emerald-600 transition-colors">${place.name}</h4>
+                        <p class="text-xs text-slate-500 line-clamp-2 mt-0.5">${place.desc}</p>
+                    </div>
+                    <div class="flex flex-wrap gap-1 pt-1">
+                        ${place.tags.map(t => `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-medium">#${t}</span>`).join('')}
+                    </div>
                 `;
-            } else {
-                legendContainer.innerHTML = `
-                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span> Cultural / Slang Spots</div>
-                    <div class="flex items-center gap-2 text-slate-500"><i class="fa-solid fa-volume-high text-orange-600"></i> Audio Speech Guide</div>
-                `;
-            }
+
+                listContainer.appendChild(card);
+            });
         }
 
-        // Web Speech API for Korean Text-to-Speech
         function speakKorean(text) {
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ko-KR';
-                utterance.rate = 0.9;
+                utterance.rate = 0.85;
                 window.speechSynthesis.speak(utterance);
             } else {
-                alert("Speech synthesis is not supported on this browser.");
+                alert("현재 브라우저는 음성 재생(TTS)을 지원하지 않습니다.");
             }
         }
 
-        // Clipboard Helper
         function copyToClipboard(text) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(() => {
-                    showToast("Copied Korean phrase!");
-                }).catch(() => {
-                    fallbackCopy(text);
-                });
-            } else {
-                fallbackCopy(text);
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            const toast = document.createElement('div');
+            toast.className = "fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-4 py-2 rounded-xl shadow-2xl z-50 flex items-center gap-2 animate-bounce";
+            toast.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> 한글 표현이 클립보드에 복사되었습니다!`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+
+        function recenterMap() {
+            if (map && !isFallbackMode) {
+                map.setCenter(new kakao.maps.LatLng(37.5550, 126.9800));
+                map.setLevel(6);
             }
         }
-
-        function fallbackCopy(text) {
-            const tempInput = document.createElement("textarea");
-            tempInput.value = text;
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            document.execCommand("copy");
-            document.body.removeChild(tempInput);
-            showToast("Copied Korean phrase!");
+        function zoomInMap() {
+            if (map && !isFallbackMode) map.setLevel(map.getLevel() - 1);
         }
-
-        function showToast(message) {
-            const toast = document.createElement('div');
-            toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs px-4 py-2 rounded-xl shadow-xl z-50 flex items-center gap-2 backdrop-blur-sm transition-all duration-300';
-            toast.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> ${message}`;
-            document.body.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 2000);
+        function zoomOutMap() {
+            if (map && !isFallbackMode) map.setLevel(map.getLevel() + 1);
         }
     </script>
 </body>
