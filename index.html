@@ -148,3 +148,814 @@
         <!-- Map View Container -->
         <main class="flex-1 relative h-1/2 md:h-full w-full bg-slate-100">
             <!-- Kakao Map Container -->
+            <div id="map" class="w-full h-full"></div>
+
+            <!-- Map Fallback / Troubleshooting UI (Shown if Kakao Map fails to load) -->
+            <div id="map-fallback" class="hidden absolute inset-0 z-20 bg-slate-900/90 text-white p-6 flex-col items-center justify-center text-center space-y-4 backdrop-blur-md">
+                <div class="w-16 h-16 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center text-2xl border border-red-500/30">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div class="max-w-md space-y-2">
+                    <h3 class="text-lg font-bold text-white">Kakao Map Loading Issue</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        The map couldn't display. This usually happens when your website domain is not registered in the Kakao Developers Console.
+                    </p>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700/80 p-4 rounded-xl text-left text-xs space-y-2 max-w-md w-full">
+                    <div class="font-semibold text-amber-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-key"></i> How to fix this:
+                    </div>
+                    <ol class="list-decimal list-inside space-y-1 text-slate-300 leading-normal">
+                        <li>Log into <a href="https://developers.kakao.com" target="_blank" class="text-indigo-400 underline">developers.kakao.com</a></li>
+                        <li>Go to <b>App Settings ➔ Platform ➔ Web</b></li>
+                        <li>Add your current domain (e.g. <code class="bg-slate-900 px-1 py-0.5 rounded text-amber-300" id="current-domain-text">https://username.github.io</code>)</li>
+                        <li>Ensure <b>KakaoMap Product</b> is set to <b>ON</b></li>
+                    </ol>
+                </div>
+
+                <div class="pt-2">
+                    <button onclick="retryKakaoMapLoad()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-4 py-2 rounded-lg font-semibold transition-all">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> Retry Loading Map
+                    </button>
+                </div>
+            </div>
+
+            <!-- Map Action Floating Controls -->
+            <div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                <button onclick="setMapCenterToUser()" title="My Location" class="w-10 h-10 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-md hover:bg-slate-50 flex items-center justify-center transition-all active:scale-95">
+                    <i class="fa-solid fa-crosshairs text-base"></i>
+                </button>
+                <button onclick="zoomInMap()" title="Zoom In" class="w-10 h-10 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-md hover:bg-slate-50 flex items-center justify-center transition-all active:scale-95">
+                    <i class="fa-solid fa-plus text-base"></i>
+                </button>
+                <button onclick="zoomOutMap()" title="Zoom Out" class="w-10 h-10 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-md hover:bg-slate-50 flex items-center justify-center transition-all active:scale-95">
+                    <i class="fa-solid fa-minus text-base"></i>
+                </button>
+            </div>
+
+            <!-- Map Legend -->
+            <div class="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200 p-3 rounded-xl shadow-lg text-xs hidden sm:block">
+                <div class="font-bold text-slate-800 mb-1 border-b pb-1">Legend</div>
+                <div class="space-y-1 text-slate-600" id="map-legend">
+                    <!-- Dynamic legend content -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Global State variables
+        let map = null;
+        let markers = [];
+        let customOverlay = null;
+        let currentMode = 'dietary'; // 'dietary' or 'culture'
+        let currentFilter = 'ALL';
+        let activePlaceId = null;
+        let mapLoadedSuccessfully = false;
+
+        // Seoul Center Coordinates
+        const SEOUL_CENTER = { lat: 37.5615, lng: 126.9830 };
+
+        // Places Master Dataset
+        const PLACES_DATA = [
+            // ==================== DIETARY SAFE ZONE LOCATIONS ====================
+            {
+                id: 'd1',
+                mode: 'dietary',
+                category: 'HALAL',
+                title: 'Myeongdong K-BBQ Safe Zone',
+                titleKo: '명동 할랄 코리안 바베큐',
+                lat: 37.5620,
+                lng: 126.9852,
+                area: 'Myeongdong',
+                address: 'Myeongdong 8-gil 12, Jung-gu, Seoul',
+                tags: ['Halal Certified', 'No Pork', 'Private Grill'],
+                rating: 4.8,
+                summary: 'Strictly Halal-certified beef & marinated lamb cooked on dedicated separate grills.',
+                details: {
+                    halalCert: 'KMF (Korea Muslim Federation) Certified',
+                    porkFree: '100% Pork & Lard Free Kitchen',
+                    vegetarianOpt: 'Available (Mushroom & Tofu Sides)',
+                    keyTip: 'Side dishes (Kimchi, Pickles) are made with plant-based broth without fish sauce.',
+                    phraseKo: '할랄 인증 고기인가요?',
+                    phraseEng: 'Is this Halal-certified meat?',
+                    phrasePron: 'Halal in-jeung go-gi-in-ga-yo?'
+                }
+            },
+            {
+                id: 'd2',
+                mode: 'dietary',
+                category: 'VEGAN',
+                title: 'Hongdae Green Garden Bibimbap',
+                titleKo: '홍대 그린 비빔밥',
+                lat: 37.5552,
+                lng: 126.9235,
+                area: 'Hongdae',
+                address: 'Eowisang-ro 25, Mapo-gu, Seoul',
+                tags: ['100% Vegan', 'Gluten-Free', 'No Fish Sauce'],
+                rating: 4.9,
+                summary: 'Authentic Bibimbap with wild mountain herbs, mushrooms, and soy-based homemade pastes.',
+                details: {
+                    halalCert: 'Vegan-Friendly (No Pork/Alcohol)',
+                    porkFree: '100% Plant-based',
+                    vegetarianOpt: 'Strict Vegan Menu Options',
+                    keyTip: 'The Kimchi served here is made without salted shrimp or fish sauce.',
+                    phraseKo: '고기나 젓갈 빼주세요.',
+                    phraseEng: 'Please omit meat and fish sauce.',
+                    phrasePron: 'Go-gi-na jeot-gal ppae-ju-se-yo.'
+                }
+            },
+            {
+                id: 'd3',
+                mode: 'dietary',
+                category: 'ALLERGY',
+                title: 'Seongsu Oat & Gluten-Free Bakery',
+                titleKo: '성수 오트 베이커리',
+                lat: 37.5445,
+                lng: 127.0560,
+                area: 'Seongsu-dong',
+                address: 'Seongsui-ro 10-gil 18, Seongdong-gu, Seoul',
+                tags: ['Dairy-Free', 'Nut-Free', 'Oat Milk'],
+                rating: 4.7,
+                summary: 'All desserts and beverages utilize premium Oat Milk or Almond Milk with clear allergen warnings.',
+                details: {
+                    halalCert: 'Alcohol-Free Bakery',
+                    porkFree: 'No Gelatin / No Lard',
+                    vegetarianOpt: '100% Dairy-Free Option',
+                    keyTip: 'Free substitute to Oat milk for all handcrafted coffee drinks.',
+                    phraseKo: '우유 대신 오트밀크로 바꿔주세요.',
+                    phraseEng: 'Please substitute milk with oat milk.',
+                    phrasePron: 'U-yu dae-sin oat-milk-ro ba-kkwo-ju-se-yo.'
+                }
+            },
+            {
+                id: 'd4',
+                mode: 'dietary',
+                category: 'SEAFOOD',
+                title: 'Itaewon Seafood Tofu Stew',
+                titleKo: '이태원 해물 순두부',
+                lat: 37.5348,
+                lng: 126.9940,
+                area: 'Itaewon',
+                address: 'Itaewon-ro 180, Yongsan-gu, Seoul',
+                tags: ['Seafood Base', 'No Beef/Pork', 'Muslim Friendly'],
+                rating: 4.6,
+                summary: 'Spicy soft tofu stew brewed with kelp, radish, shrimp, and fresh squid broth.',
+                details: {
+                    halalCert: 'Muslim Friendly (Pork-free Kitchen)',
+                    porkFree: 'No Beef or Pork Meat/Lard Used',
+                    vegetarianOpt: 'Kelp Broth Tofu Stew on request',
+                    keyTip: 'Specify "No Seafood" if you prefer pure soy bean broth.',
+                    phraseKo: '돼지고기 육수 아니죠?',
+                    phraseEng: 'Is it non-pork broth?',
+                    phrasePron: 'Dwae-ji-go-gi yuk-su a-ni-jyo?'
+                }
+            },
+            {
+                id: 'd5',
+                mode: 'dietary',
+                category: 'VEGAN',
+                title: 'Insa-dong Temple Food Sanchon',
+                titleKo: '인사동 사찰음식 산촌',
+                lat: 37.5732,
+                lng: 126.9858,
+                area: 'Insadong',
+                address: 'Gwanhun-dong 14, Jongno-gu, Seoul',
+                tags: ['Temple Cuisine', 'No Garlic/Onion', 'Vegan'],
+                rating: 4.9,
+                summary: 'Traditional Buddhist temple cuisine made with wild herbs without garlic, onion, or meat.',
+                details: {
+                    halalCert: 'Naturally Halal & Vegan',
+                    porkFree: 'Strictly Zero Meat or Lard',
+                    vegetarianOpt: '100% Vegan Certified Course',
+                    keyTip: 'Enjoy a serene Korean tea tasting included with course meals.',
+                    phraseKo: '채식 메뉴입니다.',
+                    phraseEng: 'This is a vegetarian menu.',
+                    phrasePron: 'Chae-sik menu-im-ni-da.'
+                }
+            },
+
+            // ==================== CULTURE & K-SLANG LOCATIONS ====================
+            {
+                id: 'c1',
+                mode: 'culture',
+                category: 'K_FOOD_SLANG',
+                title: 'Gwangjang Market Survival Spot',
+                titleKo: '광장시장 먹거리 & 필수 한국어',
+                lat: 37.5701,
+                lng: 126.9997,
+                area: 'Jongno',
+                address: 'Changgyeonggung-ro 88, Jongno-gu, Seoul',
+                tags: ['Market Tips', 'Imo-nim!', 'Cash or T-Money'],
+                rating: 4.9,
+                summary: 'Lively traditional market! Learn how to politely call female stall vendors and ask for side refills.',
+                details: {
+                    slangExpression: '이모님~! (Imo-nim!)',
+                    pronunciation: 'Ee-mo-nim!',
+                    englishMeaning: 'Auntie! (Polite friendly way to call female vendors)',
+                    cultureTip: 'In street markets or local diners, call female staff "Imo-nim" to show warmth and often get extra bonus portions!',
+                    extraPhrase: '이모님! 떡볶이 1인분 주세요! (Auntie! 1 serving of Tteokbokki please!)',
+                    extraPhrasePron: 'Imo-nim! Tteok-bok-ki il-in-bun ju-se-yo!'
+                }
+            },
+            {
+                id: 'c2',
+                mode: 'culture',
+                category: 'CULTURE_TIP',
+                title: 'Local Diner Table Drawer Secret',
+                titleKo: '수저통은 테이블 옆 서랍에!',
+                lat: 37.5601,
+                lng: 126.9820,
+                area: 'Myeongdong / City Hall',
+                address: 'Eulji-ro 1-ga, Jung-gu, Seoul',
+                tags: ['Drawer Spoon', 'Self Banchan', 'Table Bell'],
+                rating: 4.8,
+                summary: 'Don\'t panic if you don\'t see chopsticks or napkins on top of the dining table!',
+                details: {
+                    slangExpression: '여기요! / 저기요! (Yeo-gi-yo! / Jeo-gi-yo!)',
+                    pronunciation: 'Yeo-gi-yo!',
+                    englishMeaning: 'Over here, please! (Polite way to call waitstaff)',
+                    cultureTip: 'Look at the side frame under the table! 90% of local diners store chopsticks, spoons, and napkins in a pull-out side drawer.',
+                    extraPhrase: '반찬 셀프인가요? (Are side dishes self-service?)',
+                    extraPhrasePron: 'Ban-chan self-in-ga-yo?'
+                }
+            },
+            {
+                id: 'c3',
+                mode: 'culture',
+                category: 'K_FOOD_SLANG',
+                title: 'Hongdae K-Cafe "Ah-Ah" Hack',
+                titleKo: '카공족 & 아아 (Ice Americano) 문화',
+                lat: 37.5582,
+                lng: 126.9260,
+                area: 'Hongdae',
+                address: 'Hongik-ro 3-gil, Mapo-gu, Seoul',
+                tags: ['Ah-Ah', 'Receipt Wifi Code', 'Takeout Discount'],
+                rating: 4.7,
+                summary: 'Master the iconic Korean iced coffee abbreviation "Ah-Ah" for rapid ordering.',
+                details: {
+                    slangExpression: '아아 한 잔 주세요! (Ah-Ah han jan ju-se-yo!)',
+                    pronunciation: 'Ah-Ah han jan ju-se-yo!',
+                    englishMeaning: 'One Iced Americano, please! ("Ah-Ah" = Ice Americano)',
+                    cultureTip: 'Wi-Fi passwords and restroom door passcode numbers are almost always printed at the bottom of your purchase receipt!',
+                    extraPhrase: '영수증 주세요 / 와이파이 비번이 뭐예요?',
+                    extraPhrasePron: 'Yeong-su-jeung ju-se-yo / Wi-Fi bi-beon-i mweo-yeo-yo?'
+                }
+            },
+            {
+                id: 'c4',
+                mode: 'culture',
+                category: 'STREET_SURVIVAL',
+                title: 'Subway & Convenience Store Card Hack',
+                titleKo: '지하철 환승 & 1+1 이벤트',
+                lat: 37.5559,
+                lng: 126.9723,
+                area: 'Seoul Station',
+                address: 'Hangang-daero 405, Yongsan-gu, Seoul',
+                tags: ['T-Money', '1+1 Deals', 'Trash Can Hack'],
+                rating: 4.9,
+                summary: 'How to tag transit cards for transfer discounts and spot 1+1 / 2+1 promos at convenience stores.',
+                details: {
+                    slangExpression: '봉투 필요하세요? (Bong-tu pil-yo-ha-se-yo?)',
+                    pronunciation: 'Bong-tu pil-yo-ha-se-yo?',
+                    englishMeaning: 'Do you need a plastic bag? (Answer "Ne" for Yes / "Ani-yo" for No)',
+                    cultureTip: 'Public trash cans are scarce on streets! Dispose of empty drink cups inside convenience store bins or subway platforms.',
+                    extraPhrase: '티머니 충전해 주세요. (Please recharge my T-money card.)',
+                    extraPhrasePron: 'T-money chung-jeon-hae ju-se-yo.'
+                }
+            },
+            {
+                id: 'c5',
+                mode: 'culture',
+                category: 'CULTURE_TIP',
+                title: 'Namsan Tower Photo Courtesy',
+                titleKo: '남산타워 포토존 & 문화',
+                lat: 37.5512,
+                lng: 126.9882,
+                area: 'Namsan / Yongsan',
+                address: 'Namsantower-gil 105, Yongsan-gu, Seoul',
+                tags: ['Photo Courtesy', 'Pic spot', 'Cable Car'],
+                rating: 4.8,
+                summary: 'Polite photo-asking phrases and couple padlock traditions at Namsan N Tower.',
+                details: {
+                    slangExpression: '사진 한 장만 찍어주실 수 있나요?',
+                    pronunciation: 'Sa-jin han jang-man tjeog-eo-ju-sil su in-na-yo?',
+                    englishMeaning: 'Could you take a picture of us, please?',
+                    cultureTip: 'Koreans take photo taking seriously! Locals will often take multiple vertical and horizontal shots to ensure you get a great picture.',
+                    extraPhrase: '하나, 둘, 셋~ 김치! (One, two, three ~ Kimchi!)',
+                    extraPhrasePron: 'Ha-na, dul, set ~ Kim-chi!'
+                }
+            }
+        ];
+
+        const CATEGORIES = {
+            dietary: [
+                { code: 'ALL', label: 'All Safe Spots', icon: 'fa-globe' },
+                { code: 'HALAL', label: 'Halal Certified', icon: 'fa-kaaba' },
+                { code: 'VEGAN', label: 'Vegan / Plant-Based', icon: 'fa-leaf' },
+                { code: 'ALLERGY', label: 'Allergy / Dairy-Free', icon: 'fa-shield-halved' },
+                { code: 'SEAFOOD', label: 'Seafood / No Pork', icon: 'fa-fish' }
+            ],
+            culture: [
+                { code: 'ALL', label: 'All Cultural Spots', icon: 'fa-globe' },
+                { code: 'K_FOOD_SLANG', label: 'Food Slang', icon: 'fa-bowl-food' },
+                { code: 'CULTURE_TIP', label: 'Diner Etiquette', icon: 'fa-lightbulb' },
+                { code: 'STREET_SURVIVAL', label: 'Street & Transport', icon: 'fa-bus' }
+            ]
+        };
+
+        window.onload = function() {
+            document.getElementById('current-domain-text').textContent = window.location.origin;
+            renderSubFilters();
+            renderPlacesList();
+            updateLegend();
+
+            // Safe Kakao Map Initialization using kakao.maps.load()
+            initKakaoMapSafely();
+        };
+
+        function initKakaoMapSafely() {
+            if (typeof kakao !== 'undefined' && kakao.maps) {
+                // Execute initialization inside kakao.maps.load callback
+                kakao.maps.load(function() {
+                    try {
+                        const container = document.getElementById('map');
+                        const options = {
+                            center: new kakao.maps.LatLng(SEOUL_CENTER.lat, SEOUL_CENTER.lng),
+                            level: 6
+                        };
+
+                        map = new kakao.maps.Map(container, options);
+                        mapLoadedSuccessfully = true;
+
+                        // Add Zoom control
+                        const zoomControl = new kakao.maps.ZoomControl();
+                        map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+                        // Render markers
+                        renderMapMarkers();
+                        
+                        // Hide fallback UI if previously shown
+                        document.getElementById('map-fallback').classList.add('hidden');
+                        document.getElementById('map-fallback').classList.remove('flex');
+                    } catch (err) {
+                        console.error("Kakao Map init error:", err);
+                        showMapFallback();
+                    }
+                });
+            } else {
+                console.warn("Kakao Map SDK failed to load. Showing fallback UI.");
+                showMapFallback();
+            }
+        }
+
+        function showMapFallback() {
+            mapLoadedSuccessfully = false;
+            const fallbackEl = document.getElementById('map-fallback');
+            fallbackEl.classList.remove('hidden');
+            fallbackEl.classList.add('flex');
+        }
+
+        function retryKakaoMapLoad() {
+            initKakaoMapSafely();
+        }
+
+        function switchMode(mode) {
+            if (currentMode === mode) return;
+            currentMode = mode;
+            currentFilter = 'ALL';
+            activePlaceId = null;
+
+            if (customOverlay) {
+                customOverlay.setMap(null);
+            }
+
+            const btnDietary = document.getElementById('btn-mode-dietary');
+            const btnCulture = document.getElementById('btn-mode-culture');
+            const activeModeLabel = document.getElementById('active-mode-label');
+
+            if (mode === 'dietary') {
+                btnDietary.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-white text-emerald-700 shadow-sm";
+                btnCulture.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900";
+                activeModeLabel.textContent = "Dietary Safe Mode";
+                activeModeLabel.className = "font-semibold text-emerald-600";
+            } else {
+                btnCulture.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 bg-white text-orange-700 shadow-sm";
+                btnDietary.className = "flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 text-slate-600 hover:text-slate-900";
+                activeModeLabel.textContent = "Culture & K-Slang Mode";
+                activeModeLabel.className = "font-semibold text-orange-600";
+            }
+
+            renderSubFilters();
+            renderPlacesList();
+            if (mapLoadedSuccessfully) {
+                renderMapMarkers();
+            }
+            updateLegend();
+        }
+
+        function renderSubFilters() {
+            const container = document.getElementById('sub-filter-container');
+            const categories = CATEGORIES[currentMode];
+
+            container.innerHTML = categories.map(cat => {
+                const isActive = currentFilter === cat.code;
+                const activeColor = currentMode === 'dietary' 
+                    ? 'bg-emerald-600 text-white shadow-sm' 
+                    : 'bg-orange-500 text-white shadow-sm';
+                const inactiveColor = 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100';
+
+                return `
+                    <button onclick="setFilter('${cat.code}')" class="px-2.5 py-1 rounded-full font-medium transition-all flex items-center gap-1.5 whitespace-nowrap text-xs ${isActive ? activeColor : inactiveColor}">
+                        <i class="fa-solid ${cat.icon}"></i>
+                        <span>${cat.label}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function setFilter(code) {
+            currentFilter = code;
+            renderSubFilters();
+            renderPlacesList();
+            if (mapLoadedSuccessfully) {
+                renderMapMarkers();
+            }
+        }
+
+        function getFilteredPlaces() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+
+            return PLACES_DATA.filter(place => {
+                if (place.mode !== currentMode) return false;
+                if (currentFilter !== 'ALL' && place.category !== currentFilter) return false;
+
+                if (searchTerm) {
+                    const matchTitle = place.title.toLowerCase().includes(searchTerm);
+                    const matchTitleKo = place.titleKo.toLowerCase().includes(searchTerm);
+                    const matchArea = place.area.toLowerCase().includes(searchTerm);
+                    const matchSummary = place.summary.toLowerCase().includes(searchTerm);
+                    const matchTags = place.tags.some(t => t.toLowerCase().includes(searchTerm));
+
+                    return matchTitle || matchTitleKo || matchArea || matchSummary || matchTags;
+                }
+
+                return true;
+            });
+        }
+
+        function renderPlacesList() {
+            const places = getFilteredPlaces();
+            const container = document.getElementById('places-list');
+            const countLabel = document.getElementById('list-count');
+
+            countLabel.textContent = `Showing ${places.length} locations`;
+
+            if (places.length === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center text-slate-400 space-y-2">
+                        <i class="fa-solid fa-map-location-dot text-3xl"></i>
+                        <p class="text-xs font-medium">No locations match your filter.</p>
+                        <button onclick="clearSearch(); setFilter('ALL');" class="text-xs text-brand-600 font-semibold underline">Reset search filters</button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = places.map(place => {
+                const isActive = activePlaceId === place.id;
+                const isDietary = place.mode === 'dietary';
+                const accentBorder = isDietary ? 'border-l-emerald-500' : 'border-l-orange-500';
+
+                return `
+                    <div onclick="selectPlace('${place.id}')" class="p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${isActive ? 'bg-indigo-50/80 border-brand-500 ring-1 ring-brand-500/30' : 'bg-white border-slate-200/80 hover:border-slate-300'} border-l-4 ${accentBorder} mb-2">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase mb-1 ${isDietary ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'}">
+                                    ${place.category.replace('_', ' ')}
+                                </span>
+                                <h3 class="font-bold text-sm text-slate-900 leading-snug">${place.title}</h3>
+                                <p class="text-xs text-slate-500 font-medium">${place.titleKo}</p>
+                            </div>
+                            <div class="flex items-center text-xs font-bold text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 shrink-0">
+                                <i class="fa-solid fa-star text-[10px] mr-1"></i>${place.rating}
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-slate-600 my-2 line-clamp-2">${place.summary}</p>
+
+                        <div class="flex flex-wrap gap-1 mt-2">
+                            ${place.tags.map(tag => `<span class="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded font-medium">#${tag}</span>`).join('')}
+                        </div>
+
+                        <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                            <span><i class="fa-solid fa-location-dot mr-1 text-slate-400"></i>${place.area}</span>
+                            <span class="text-brand-600 font-semibold flex items-center gap-1">
+                                View details <i class="fa-solid fa-chevron-right text-[9px]"></i>
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderMapMarkers() {
+            if (!mapLoadedSuccessfully || !map) return;
+
+            // Clear existing markers
+            markers.forEach(m => m.setMap(null));
+            markers = [];
+
+            if (customOverlay) {
+                customOverlay.setMap(null);
+            }
+
+            const places = getFilteredPlaces();
+
+            places.forEach(place => {
+                const position = new kakao.maps.LatLng(place.lat, place.lng);
+                const isDietary = place.mode === 'dietary';
+                const badgeBg = isDietary ? '#10b981' : '#f97316';
+                const iconClass = isDietary ? 'fa-utensils' : 'fa-comments';
+
+                const markerContent = document.createElement('div');
+                markerContent.className = 'cursor-pointer group';
+                markerContent.innerHTML = `
+                    <div style="background-color: ${badgeBg};" class="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-lg border-2 border-white transform transition-transform duration-200 hover:scale-110 active:scale-95">
+                        <i class="fa-solid ${iconClass} text-sm"></i>
+                    </div>
+                `;
+
+                const markerOverlay = new kakao.maps.CustomOverlay({
+                    position: position,
+                    content: markerContent,
+                    yAnchor: 1
+                });
+
+                markerOverlay.setMap(map);
+                markers.push(markerOverlay);
+
+                markerContent.addEventListener('click', () => {
+                    selectPlace(place.id);
+                });
+            });
+        }
+
+        function selectPlace(placeId) {
+            activePlaceId = placeId;
+            const place = PLACES_DATA.find(p => p.id === placeId);
+            if (!place) return;
+
+            renderPlacesList();
+
+            if (mapLoadedSuccessfully && map) {
+                const moveLatLng = new kakao.maps.LatLng(place.lat, place.lng);
+                map.panTo(moveLatLng);
+                showInfoOverlay(place, moveLatLng);
+            }
+        }
+
+        function showInfoOverlay(place, position) {
+            if (!mapLoadedSuccessfully || !map) return;
+
+            if (customOverlay) {
+                customOverlay.setMap(null);
+            }
+
+            const isDietary = place.mode === 'dietary';
+            const themeColorClass = isDietary ? 'bg-emerald-600' : 'bg-orange-500';
+
+            let bodyHtml = '';
+
+            if (isDietary) {
+                bodyHtml = `
+                    <div class="space-y-2 text-xs">
+                        <div class="p-2 bg-emerald-50 rounded-lg border border-emerald-100">
+                            <span class="font-bold text-emerald-800 flex items-center gap-1">
+                                <i class="fa-solid fa-certificate"></i> Certification / Status
+                            </span>
+                            <p class="text-emerald-700 font-medium">${place.details.halalCert}</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <div class="p-2 bg-slate-50 rounded border border-slate-200">
+                                <span class="font-bold text-slate-700 block">Pork & Lard</span>
+                                <span class="text-slate-600">${place.details.porkFree}</span>
+                            </div>
+                            <div class="p-2 bg-slate-50 rounded border border-slate-200">
+                                <span class="font-bold text-slate-700 block">Veg Option</span>
+                                <span class="text-slate-600">${place.details.vegetarianOpt}</span>
+                            </div>
+                        </div>
+                        <div class="p-2 bg-amber-50 rounded border border-amber-200/80 text-amber-900">
+                            <span class="font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-lightbulb text-amber-600"></i> Local Tip
+                            </span>
+                            <p class="text-[11px] leading-tight">${place.details.keyTip}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                bodyHtml = `
+                    <div class="space-y-2 text-xs">
+                        <div class="p-2.5 bg-orange-50 rounded-xl border border-orange-200 text-orange-900">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-orange-700">Essential Expression</span>
+                                <button onclick="speakKorean('${place.details.slangExpression}')" class="text-xs bg-orange-200 hover:bg-orange-300 text-orange-800 px-2 py-0.5 rounded font-semibold flex items-center gap-1">
+                                    <i class="fa-solid fa-volume-high"></i> Listen
+                                </button>
+                            </div>
+                            <div class="text-base font-bold text-slate-900 my-0.5">${place.details.slangExpression}</div>
+                            <div class="text-xs text-orange-800 font-medium italic mb-1">[ Pronunciation: ${place.details.pronunciation} ]</div>
+                            <div class="text-xs font-semibold text-slate-700">${place.details.englishMeaning}</div>
+                        </div>
+                        <div class="p-2 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-bold text-slate-800 block mb-0.5"><i class="fa-solid fa-compass text-orange-500 mr-1"></i> Culture Survival Tip</span>
+                            <p class="text-slate-600 text-[11px] leading-relaxed">${place.details.cultureTip}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const phraseKo = isDietary ? place.details.phraseKo : place.details.extraPhrase;
+            const phraseEng = isDietary ? place.details.phraseEng : place.details.slangExpression;
+
+            const contentHtml = `
+                <div class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden w-80 max-w-[90vw] text-slate-800 font-sans custom-overlay">
+                    <div class="${themeColorClass} p-3 text-white flex items-start justify-between">
+                        <div>
+                            <span class="text-[10px] bg-white/20 backdrop-blur-md px-2 py-0.5 rounded font-semibold uppercase tracking-wider">
+                                ${place.category.replace('_', ' ')}
+                            </span>
+                            <h2 class="font-bold text-base mt-0.5 leading-snug">${place.title}</h2>
+                            <p class="text-xs opacity-90">${place.titleKo}</p>
+                        </div>
+                        <button onclick="closeOverlay()" class="text-white/80 hover:text-white text-lg p-1">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="p-3 space-y-3 max-h-72 overflow-y-auto">
+                        ${bodyHtml}
+
+                        <div class="bg-slate-100 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                            <div class="overflow-hidden">
+                                <span class="text-[10px] text-slate-500 font-bold uppercase block">Show to Staff</span>
+                                <div class="font-bold text-slate-900 text-xs truncate">${phraseKo}</div>
+                                <div class="text-[11px] text-slate-600 truncate">${phraseEng}</div>
+                            </div>
+                            <button onclick="copyToClipboard('${phraseKo}')" title="Copy Text" class="bg-white hover:bg-slate-200 text-slate-700 p-2 rounded-lg border border-slate-300 text-xs shrink-0 transition-all active:scale-95">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="px-3 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span><i class="fa-solid fa-map-pin mr-1 text-slate-400"></i>${place.area}</span>
+                        <a href="https://map.kakao.com/link/map/${encodeURIComponent(place.title)},${place.lat},${place.lng}" target="_blank" class="text-brand-600 font-semibold hover:underline flex items-center gap-1">
+                            KakaoMap <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>
+            `;
+
+            customOverlay = new kakao.maps.CustomOverlay({
+                position: position,
+                content: contentHtml,
+                xAnchor: 0.5,
+                yAnchor: 1.15,
+                zIndex: 100
+            });
+
+            customOverlay.setMap(map);
+        }
+
+        function closeOverlay() {
+            if (customOverlay) {
+                customOverlay.setMap(null);
+            }
+        }
+
+        function filterPlaces() {
+            const clearBtn = document.getElementById('clear-search-btn');
+            const searchVal = document.getElementById('search-input').value;
+            
+            if (searchVal.trim() !== '') {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            renderPlacesList();
+            if (mapLoadedSuccessfully) {
+                renderMapMarkers();
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('clear-search-btn').classList.add('hidden');
+            renderPlacesList();
+            if (mapLoadedSuccessfully) {
+                renderMapMarkers();
+            }
+        }
+
+        function setMapCenterToUser() {
+            if (!mapLoadedSuccessfully || !map) {
+                alert("Map is currently not loaded.");
+                return;
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const userLoc = new kakao.maps.LatLng(lat, lng);
+                        map.panTo(userLoc);
+                    },
+                    () => {
+                        alert("Unable to fetch current location. Defaulting to Seoul center.");
+                    }
+                );
+            } else {
+                alert("Geolocation is not supported by your browser.");
+            }
+        }
+
+        function zoomInMap() {
+            if (mapLoadedSuccessfully && map) {
+                map.setLevel(map.getLevel() - 1);
+            }
+        }
+
+        function zoomOutMap() {
+            if (mapLoadedSuccessfully && map) {
+                map.setLevel(map.getLevel() + 1);
+            }
+        }
+
+        function updateLegend() {
+            const legendContainer = document.getElementById('map-legend');
+            if (currentMode === 'dietary') {
+                legendContainer.innerHTML = `
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Halal / Vegan Spots</div>
+                    <div class="flex items-center gap-2 text-slate-500"><i class="fa-solid fa-certificate text-emerald-600"></i> Certified Ingredients</div>
+                `;
+            } else {
+                legendContainer.innerHTML = `
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span> Cultural / Slang Spots</div>
+                    <div class="flex items-center gap-2 text-slate-500"><i class="fa-solid fa-volume-high text-orange-600"></i> Audio Speech Guide</div>
+                `;
+            }
+        }
+
+        // Web Speech API for Korean Text-to-Speech
+        function speakKorean(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("Speech synthesis is not supported on this browser.");
+            }
+        }
+
+        // Clipboard Helper
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast("Copied Korean phrase!");
+                }).catch(() => {
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const tempInput = document.createElement("textarea");
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+            showToast("Copied Korean phrase!");
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs px-4 py-2 rounded-xl shadow-xl z-50 flex items-center gap-2 backdrop-blur-sm transition-all duration-300';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
